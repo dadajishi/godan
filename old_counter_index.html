@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+    <title>Counter</title>
+    <style>
+        body { display: flex; flex-direction: column; align-items: center; margin: 20px; }
+        #counter { font-size: 24px; font-weight: bold; margin: 10px; }
+        button { padding: 10px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Counter</h1>
+    <div id="counter">0</div>
+    <button onclick="increment()">+1</button>
+    <button onclick="decrement()">-1</button>
+    <script>
+        function increment() {
+            const counter = document.getElementById('counter');
+            let count = parseInt(counter.textContent);
+            count++;
+            counter.textContent = count;
+        }
+        function decrement() {
+            const counter = document.getElementById('counter');
+            let count = parseInt(counter.textContent);
+            count--;
+            counter.textContent = count;
+        }
+    </script>
+</body>
+</html>

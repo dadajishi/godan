@@ -1,0 +1,130 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #74ebd5, #ACB6E5);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.container {
+    background: rgba(255, 255, 255, 0.9);
+    padding: 30px;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    width: 90%;
+    max-width: 400px;
+    text-align: center;
+}
+
+h1 {
+    color: #333;
+    margin-bottom: 20px;
+    font-size: 2rem;
+}
+
+.search-box {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+#cityInput {
+    flex: 1;
+    padding: 10px;
+    border: 2px solid #ddd;
+    border-radius: 10px;
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.3s;
+}
+
+#cityInput:focus {
+    border-color: #74ebd5;
+}
+
+#searchBtn {
+    padding: 10px 20px;
+    background: #74ebd5;
+    border: none;
+    border-radius: 10px;
+    color: #333;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+#searchBtn:hover {
+    background: #5ac8b8;
+}
+
+.weather-info {
+    background: #f8f9fa;
+    border-radius: 15px;
+    padding: 20px;
+    margin-top: 10px;
+    display: none;
+}
+
+.weather-info.active {
+    display: block;
+}
+
+.weather-info h2 {
+    color: #333;
+    margin-bottom: 10px;
+}
+
+.weather-info .temp {
+    font-size: 3rem;
+    font-weight: bold;
+    color: #333;
+}
+
+.weather-info .desc {
+    font-size: 1.2rem;
+    color: #666;
+    margin: 10px 0;
+}
+
+.weather-info .details {
+    display: flex;
+    justify-content: space-around;
+    margin-top: 15px;
+}
+
+.weather-info .details div {
+    background: #fff;
+    padding: 10px;
+    border-radius: 10px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    width: 30%;
+}
+
+.weather-info .details span {
+    display: block;
+    font-size: 0.9rem;
+    color: #888;
+}
+
+.weather-info .details strong {
+    font-size: 1.2rem;
+    color: #333;
+}
+
+.error {
+    color: #e74c3c;
+    margin-top: 10px;
+    font-weight: bold;
+}
+
+.loading {
+    color: #666;
+    margin-top: 10px;
+}

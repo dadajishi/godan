@@ -1,0 +1,168 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.container {
+    background: white;
+    border-radius: 20px;
+    padding: 40px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    text-align: center;
+    max-width: 400px;
+    width: 90%;
+}
+
+h1 {
+    color: #e74c3c;
+    margin-bottom: 20px;
+    font-size: 2em;
+}
+
+.timer {
+    display: flex;
+    justify-content: center;
+    margin: 20px 0;
+}
+
+.circle {
+    position: relative;
+    width: 200px;
+    height: 200px;
+}
+
+.circle svg {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+}
+
+.progress-bg {
+    fill: none;
+    stroke: #eee;
+    stroke-width: 8;
+}
+
+.progress {
+    fill: none;
+    stroke: #e74c3c;
+    stroke-width: 8;
+    stroke-linecap: round;
+    stroke-dasharray: 565.48;
+    stroke-dashoffset: 0;
+    transition: stroke-dashoffset 0.5s linear;
+}
+
+.time {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 3em;
+    font-weight: bold;
+    color: #333;
+}
+
+.controls {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin: 20px 0;
+}
+
+.btn {
+    padding: 12px 30px;
+    border: none;
+    border-radius: 50px;
+    font-size: 1em;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.btn.primary {
+    background: #e74c3c;
+    color: white;
+}
+
+.btn.primary:hover {
+    background: #c0392b;
+}
+
+.btn.secondary {
+    background: #ecf0f1;
+    color: #333;
+}
+
+.btn.secondary:hover {
+    background: #bdc3c7;
+}
+
+.mode-switch {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin: 20px 0;
+}
+
+.mode-btn {
+    padding: 8px 20px;
+    border: 2px solid #ddd;
+    border-radius: 20px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-size: 0.9em;
+}
+
+.mode-btn.active {
+    background: #e74c3c;
+    color: white;
+    border-color: #e74c3c;
+}
+
+.settings {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 20px 0;
+    text-align: left;
+    padding: 0 20px;
+}
+
+.settings label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.9em;
+    color: #555;
+}
+
+.settings input {
+    width: 60px;
+    padding: 5px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    text-align: center;
+    font-size: 1em;
+}
+
+.session-count {
+    margin-top: 20px;
+    color: #888;
+    font-size: 0.9em;
+}
+
+.session-count span {
+    font-weight: bold;
+    color: #e74c3c;
+}

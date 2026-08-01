@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>番茄钟</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🍅 番茄钟</h1>
+        <div class="timer" id="timer">25:00</div>
+        <div class="controls">
+            <button id="startBtn">开始</button>
+            <button id="resetBtn">重置</button>
+        </div>
+        <div class="mode">
+            <span id="modeLabel">工作</span>
+        </div>
+        <div class="settings">
+            <label>工作分钟: <input type="number" id="workInput" value="25" min="1" max="120"></label>
+            <label>休息分钟: <input type="number" id="breakInput" value="5" min="1" max="60"></label>
+        </div>
+        <button id="themeToggle" class="theme-toggle">切换深色模式</button>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

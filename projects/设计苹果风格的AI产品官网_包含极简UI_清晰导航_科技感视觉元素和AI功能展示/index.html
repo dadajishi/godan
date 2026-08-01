@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus AI - 智能未来</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- 导航栏 -->
+  <nav class="navbar">
+    <div class="nav-container">
+      <a href="#" class="logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+          <circle cx="12" cy="12" r="3"/>
+        </svg>
+        <span>Nexus AI</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="#features">功能</a></li>
+        <li><a href="#demo">演示</a></li>
+        <li><a href="#pricing">定价</a></li>
+        <li><a href="#contact">联系我们</a></li>
+      </ul>
+      <a href="#demo" class="nav-cta">开始使用</a>
+    </div>
+  </nav>
+
+  <!-- 主视觉区 -->
+  <header class="hero">
+    <div class="hero-content">
+      <h1>智能，触手可及</h1>
+      <p>Nexus AI 重新定义人工智能交互体验，让复杂变得简单，让创意无限延伸。</p>
+      <div class="hero-buttons">
+        <a href="#demo" class="btn btn-primary">立即体验</a>
+        <a href="#features" class="btn btn-secondary">了解更多</a>
+      </div>
+    </div>
+    <div class="hero-visual">
+      <div class="ai-orb"></div>
+      <div class="particles">
+        <span></span><span></span><span></span><span></span><span></span>
+      </div>
+    </div>
+  </header>
+
+  <!-- 功能展示 -->
+  <section id="features" class="features">
+    <div class="section-header">
+      <h2>强大功能，优雅呈现</h2>
+      <p>为现代创作者打造的全能AI工具</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 18a8 8 0 110-16 8 8 0 010 16z"/>
+            <path d="M12 6v6l4 2"/>
+          </svg>
+        </div>
+        <h3>智能对话</h3>
+        <p>自然语言理解，多轮对话，精准回答你的每一个问题。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M4 16l4-4 4 4 8-8"/>
+            <path d="M20 8h-4v4"/>
+          </svg>
+        </div>
+        <h3>数据分析</h3>
+        <p>实时洞察数据趋势，自动生成可视化报告，辅助决策。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M12 3v18M3 12h18"/>
+            <circle cx="12" cy="12" r="9"/>
+          </svg>
+        </div>
+        <h3>创意生成</h3>
+        <p>从文案到图像，AI激发你的灵感，快速产出高质量内容。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+        </div>
+        <h3>安全可靠</h3>
+        <p>企业级安全防护，数据加密传输，隐私绝对保护。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- AI演示区 -->
+  <section id="demo" class="demo">
+    <div class="section-header">
+      <h2>体验AI魔力</h2>
+      <p>输入你的问题，看看Nexus AI如何回应</p>
+    </div>
+    <div class="demo-container">
+      <div class="demo-input">
+        <textarea id="prompt" placeholder="例如：帮我写一首关于秋天的诗..."></textarea>
+        <button id="generateBtn" class="btn btn-primary">生成</button>
+      </div>
+      <div class="demo-output" id="output">
+        <p class="placeholder">AI的回复将显示在这里</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 定价 -->
+  <section id="pricing" class="pricing">
+    <div class="section-header">
+      <h2>选择适合你的方案</h2>
+      <p>灵活定价，满足不同需求</p>
+    </div>
+    <div class="pricing-grid">
+      <div class="pricing-card">
+        <h3>免费版</h3>
+        <p class="price">¥0<span>/月</span></p>
+        <ul>
+          <li>每日20次AI调用</li>
+          <li>基础功能</li>
+          <li>社区支持</li>
+        </ul>
+        <a href="#" class="btn btn-outline">开始使用</a>
+      </div>
+      <div class="pricing-card featured">
+        <h3>专业版</h3>
+        <p class="price">¥99<span>/月</span></p>
+        <ul>
+          <li>无限AI调用</li>
+          <li>高级功能</li>
+          <li>优先客服</li>
+        </ul>
+        <a href="#" class="btn btn-primary">立即升级</a>
+      </div>
+      <div class="pricing-card">
+        <h3>企业版</h3>
+        <p class="price">定制</p>
+        <ul>
+          <li>专属部署</li>
+          <li>定制模型</li>
+          <li>专属支持</li>
+        </ul>
+        <a href="#" class="btn btn-outline">联系我们</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- 联系/页脚 -->
+  <footer id="contact" class="footer">
+    <div class="footer-content">
+      <div class="footer-logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+          <circle cx="12" cy="12" r="3"/>
+        </svg>
+        <span>Nexus AI</span>
+      </div>
+      <p>© 2024 Nexus AI. 保留所有权利。</p>
+      <div class="social-links">
+        <a href="#">Twitter</a>
+        <a href="#">GitHub</a>
+        <a href="#">LinkedIn</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
