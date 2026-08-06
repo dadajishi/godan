@@ -5,6 +5,7 @@ const cors = require("cors");
 
 const brain = require("./brain");
 const dispatch = require("./dispatcher");
+const keyStorage = require("./keyStorage");
 
 
 const app = express();
@@ -13,7 +14,7 @@ const app = express();
 // 修正: CORS 收紧 — 仅允许本地前端来源，不再全开
 app.use(cors({
     origin: ["http://localhost:5173", "http://127.0.0.1:5173", "file://"],
-    methods: ["POST", "GET"]
+    methods: ["POST", "GET", "DELETE"]
 }));
 app.use(express.json());
 
@@ -110,6 +111,54 @@ app.get("/", (req,res)=>{
         "🐶 狗蛋 Agent运行中"
     );
 
+});
+
+
+// =====================================================
+// D2: 用户设置 API（API Key 加密存储，BYOK）
+// =====================================================
+
+// 读取设置（脱敏，永不返回 key 明文）
+app.get("/api/settings", async (req, res) => {
+    try {
+        const pub = await keyStorage.getPublic();
+        res.json({ success: true, ...pub });
+    } catch (err) {
+        console.error("❌ 读取设置失败:", err.message);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 保存设置 {apiKey, baseUrl?, model?}
+app.post("/api/settings", async (req, res) => {
+    try {
+        const body = (req.body && typeof req.body === "object") ? req.body : {};
+        const { apiKey, baseUrl, model } = body;
+        if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
+            return res.status(400).json({ success: false, error: "apiKey 不能为空" });
+        }
+        const method = await keyStorage.save({
+            apiKey: apiKey.trim(),
+            baseUrl: (baseUrl || "").trim(),
+            model: (model || "deepseek-chat").trim()
+        });
+        const pub = await keyStorage.getPublic();
+        res.json({ success: true, storage: method, ...pub });
+    } catch (err) {
+        console.error("❌ 保存设置失败:", err.message);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 清除设置
+app.delete("/api/settings", async (req, res) => {
+    try {
+        const removed = await keyStorage.remove();
+        res.json({ success: true, removed });
+    } catch (err) {
+        console.error("❌ 清除设置失败:", err.message);
+        res.status(500).json({ success: false, error: err.message });
+    }
 });
 
 
