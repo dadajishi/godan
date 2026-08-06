@@ -3,6 +3,7 @@ import Layout from "./components/Layout.jsx";
 import ChatView from "./views/ChatView.jsx";
 import ProjectsView from "./views/ProjectsView.jsx";
 import SettingsView from "./views/SettingsView.jsx";
+import PreviewView from "./views/PreviewView.jsx";
 
 function App() {
   return (
@@ -12,6 +13,7 @@ function App() {
           <Route path="/" element={<ChatView />} />
           <Route path="/projects" element={<ProjectsView />} />
           <Route path="/settings" element={<SettingsView />} />
+          <Route path="/preview/:name" element={<PreviewView />} />
         </Route>
       </Routes>
     </HashRouter>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://127.0.0.1:3001";
 
@@ -20,6 +21,7 @@ export default function ChatView() {
   const [status, setStatus] = useState("");
   const [sending, setSending] = useState(false);
   const endRef = useRef(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -48,6 +50,7 @@ export default function ChatView() {
 
       const data = await res.json();
       let reply = "收到 🐶";
+      let previewProject = null;
       if (data.reply?.plan?.reply) {
         reply = data.reply.plan.reply;
       } else if (typeof data.reply === "string") {
@@ -58,7 +61,14 @@ export default function ChatView() {
         reply = JSON.stringify(data.reply, null, 2);
       }
 
-      setMessages((m) => [...m, { role: "assistant", content: reply }]);
+      // D7: 任务成功且有项目产物 → 提供预览入口
+      const projName = data.reply?.result?.project;
+      if (data.reply?.success === true && projName) {
+        previewProject = projName;
+        reply = `${reply}\n\n✅ 项目「${projName}」已生成，点击下方按钮预览 →`;
+      }
+
+      setMessages((m) => [...m, { role: "assistant", content: reply, previewProject }]);
     } catch (err) {
       const msg = err.name === "AbortError"
         ? "⏱️ 请求超时（超过 180 秒），请确认后端已启动且 API Key 有效"
@@ -94,6 +104,24 @@ export default function ChatView() {
             <div>
               <small>{msg.role === "user" ? "你" : "狗蛋"}</small>
               <pre>{msg.content}</pre>
+              {msg.previewProject && (
+                <button
+                  onClick={() => navigate(`/preview/${encodeURIComponent(msg.previewProject)}`)}
+                  style={{
+                    marginTop: "10px",
+                    padding: "9px 18px",
+                    borderRadius: "10px",
+                    border: "0",
+                    background: "linear-gradient(135deg,#8178ff,#49cac6)",
+                    color: "#071019",
+                    fontSize: "13px",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                  }}
+                >
+                  👁️ 查看预览
+                </button>
+              )}
             </div>
           </div>
         ))}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://127.0.0.1:3001";
 
@@ -21,6 +22,7 @@ export default function ProjectsView() {
   const [error, setError] = useState("");
   const [deleting, setDeleting] = useState(null);
   const [notice, setNotice] = useState(null);
+  const navigate = useNavigate();
 
   async function loadProjects() {
     setLoading(true);
@@ -63,10 +65,14 @@ export default function ProjectsView() {
   }
 
   function openProject(p) {
-    // 打开项目（后端用系统命令打开 index.html 或 Finder）
-    try {
-      fetch(`${API_BASE}/api/projects/${encodeURIComponent(p.name)}/open`).catch(() => {});
-    } catch (e) { /* ignore */ }
+    // D7: 优先跳转到应用内预览（web 项目）；desktop 项目走系统打开
+    if (p.type === "web_app" && p.exists) {
+      navigate(`/preview/${encodeURIComponent(p.name)}`);
+    } else {
+      try {
+        fetch(`${API_BASE}/api/projects/${encodeURIComponent(p.name)}/open`).catch(() => {});
+      } catch (e) { /* ignore */ }
+    }
   }
 
   const cardStyle = {
