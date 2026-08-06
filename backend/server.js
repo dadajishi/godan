@@ -9,8 +9,12 @@ const keyStorage = require("./keyStorage");
 const llm = require("./llm");
 const ProjectManager = require("./projectManager");
 const createPreviewServer = require("./previewServer");
+const { PROJECTS_DIR, ensureDataDirs } = require("./paths");
 const fs = require("fs");
 const path = require("path");
+
+// D8: 打包模式下确保用户数据目录存在
+ensureDataDirs();
 
 
 const app = express();
@@ -121,7 +125,7 @@ app.get("/", (req,res)=>{
 // =====================================================
 // D7: 项目预览静态服务（带路径穿越防护）
 // =====================================================
-const PROJECTS_ROOT = path.resolve(path.join(__dirname, "..", "projects"));
+const PROJECTS_ROOT = path.resolve(PROJECTS_DIR);
 app.use("/preview", createPreviewServer(ProjectManager, PROJECTS_ROOT));
 
 

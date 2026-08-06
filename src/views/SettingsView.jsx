@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://127.0.0.1:3001";
+const API_BASE = window.godan?.apiBase || import.meta.env.VITE_API_BASE || "http://127.0.0.1:3001";
 
 // 预设模型选项（baseUrl + model 组合）
 const MODEL_PRESETS = [

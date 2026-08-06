@@ -4,6 +4,7 @@ console.log("⚙️ Executor模块加载");
 const fs = require("fs");
 const path = require("path");
 const { exec, spawn } = require("child_process");
+const { PROJECTS_DIR } = require("./paths");
 
 const testPage = require("./tester");
 const ProjectManager = require("./projectManager");
@@ -88,8 +89,7 @@ async function execute(input, context){
 
         projectDir =
         path.join(
-            process.cwd(),
-            "../projects",
+            PROJECTS_DIR,
             projectName
         );
 

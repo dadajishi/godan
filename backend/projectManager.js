@@ -2,12 +2,13 @@ console.log("📁 ProjectManager模块加载");
 
 const fs = require("fs");
 const path = require("path");
+const { PROJECT_DB, PROJECTS_DIR, IS_PACKAGED } = require("./paths");
 
 
-const PROJECT_DB = path.join(
-    __dirname,
-    "projects.json"
-);
+// D8: 打包模式下数据在用户目录，开发模式保持现状
+if (IS_PACKAGED && !fs.existsSync(path.dirname(PROJECT_DB))) {
+    fs.mkdirSync(path.dirname(PROJECT_DB), { recursive: true });
+}
 
 
 
@@ -585,13 +586,7 @@ function deleteProject(name){
     // 删除目录（安全：仅限 projects 根下）
     if(project && project.path){
         const projectsRoot =
-            path.resolve(
-                path.join(
-                    __dirname,
-                    "..",
-                    "projects"
-                )
-            );
+            path.resolve(PROJECTS_DIR);
         const target =
             path.resolve(project.path);
         if(

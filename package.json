@@ -30,9 +30,43 @@
   "build": {
     "appId": "com.godan.ai",
     "productName": "Godan",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "dist/**",
+      "backend/**",
+      "!backend/node_modules/.cache/**",
+      "!backend/*.db"
+    ],
+    "asarUnpack": [
+      "backend/node_modules/**"
+    ],
     "mac": {
-      "target": "dmg",
-      "category": "public.app-category.productivity"
-    }
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.icns"
+    },
+    "dmg": {
+      "title": "Godan ${version}",
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "npmRebuild": false
   }
 }

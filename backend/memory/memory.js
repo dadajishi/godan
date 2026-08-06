@@ -2,12 +2,10 @@ console.log("🧠 Memory模块加载");
 
 const fs = require("fs");
 const path = require("path");
+const { MEMORY_FILE } = require("../paths");
 
 
-const file = path.join(
-    __dirname,
-    "state.json"
-);
+const file = MEMORY_FILE;
 
 
 function read(){
