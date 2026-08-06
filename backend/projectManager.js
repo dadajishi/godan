@@ -11,6 +11,10 @@ const PROJECT_DB = path.join(
 
 
 
+// ======================
+// 数据库
+// ======================
+
 function ensureDB(){
 
     if(!fs.existsSync(PROJECT_DB)){
@@ -73,7 +77,9 @@ function saveProjects(projects){
 
 
 
+// ======================
 // 注册项目
+// ======================
 
 function registerProject(info){
 
@@ -150,7 +156,9 @@ function registerProject(info){
 
 
 
-// 查找项目
+// ======================
+// 智能查找项目
+// ======================
 
 function findProject(keyword){
 
@@ -166,28 +174,151 @@ function findProject(keyword){
 
 
     keyword =
+        keyword.toLowerCase();
+
+
+
+    const stopWords = [
+
+        "给",
+        "帮",
+        "我",
+        "添加",
+        "增加",
+        "修改",
+        "优化",
+        "升级",
+        "改成",
+        "加入",
+        "支持",
+        "一个",
+        "网页",
+        "网站",
+        "项目",
+        "功能"
+
+    ];
+
+
+
+    const words =
+
         keyword
-        .toLowerCase();
+
+        .replace(
+            /[^\u4e00-\u9fa5a-z0-9]/g,
+            " "
+        )
+
+        .split(/\s+/)
+
+        .filter(
+            w =>
+            w &&
+            !stopWords.includes(w)
+        );
 
 
 
-    return projects.find(
-        p=>{
+    console.log(
+        "🔎 搜索关键词:",
+        words
+    );
 
 
-            const name =
-            p.name.toLowerCase();
+
+    let bestProject=null;
+
+    let bestScore=0;
 
 
-            return (
-                name.includes(keyword)
-                ||
-                keyword.includes(name)
-            );
+
+    for(const project of projects){
+
+
+        const name =
+            project.name.toLowerCase();
+
+
+
+        let score=0;
+
+
+
+        for(const word of words){
+
+
+            if(name.includes(word)){
+
+
+                score++;
+
+
+            }
 
 
         }
+
+
+
+        console.log(
+
+            "📁匹配",
+
+            project.name,
+
+            "得分",
+
+            score
+
+        );
+
+
+
+        if(score > bestScore){
+
+
+            bestScore = score;
+
+            bestProject = project;
+
+
+        }
+
+
+    }
+
+
+
+    if(bestScore > 0){
+
+
+        console.log(
+
+            "✅智能找到项目:",
+
+            bestProject.name,
+
+            "score:",
+
+            bestScore
+
+        );
+
+
+        return bestProject;
+
+
+    }
+
+
+
+    console.log(
+        "❌没有匹配项目"
     );
+
+
+    return null;
 
 
 }
@@ -197,7 +328,9 @@ function findProject(keyword){
 
 
 
+// ======================
 // 项目列表
+// ======================
 
 function listProjects(){
 
@@ -210,8 +343,9 @@ function listProjects(){
 
 
 
-
+// ======================
 // 读取项目文件
+// ======================
 
 function readProjectFiles(projectPath){
 
@@ -229,7 +363,6 @@ function readProjectFiles(projectPath){
 
 
 
-
     function scan(dir){
 
 
@@ -241,14 +374,14 @@ function readProjectFiles(projectPath){
         for(const item of items){
 
 
-            // 跳过垃圾目录
-
             if(
+
                 item==="node_modules"
                 ||
                 item===".git"
                 ||
                 item==="dist"
+
             ){
 
                 continue;
@@ -300,7 +433,6 @@ function readProjectFiles(projectPath){
                             "utf8"
                         )
 
-
                     });
 
 
@@ -308,7 +440,7 @@ function readProjectFiles(projectPath){
 
 
                     console.log(
-                        "⚠️ 无法读取:",
+                        "⚠️无法读取:",
                         fullPath
                     );
 
@@ -340,9 +472,9 @@ function readProjectFiles(projectPath){
 
 
 
-
-
-// 获取项目结构
+// ======================
+// 获取项目信息
+// ======================
 
 function getProjectInfo(name){
 
@@ -362,7 +494,6 @@ function getProjectInfo(name){
 
     return {
 
-
         ...project,
 
 
@@ -370,7 +501,6 @@ function getProjectInfo(name){
         readProjectFiles(
             project.path
         )
-
 
     };
 
@@ -382,8 +512,9 @@ function getProjectInfo(name){
 
 
 
-
-// 删除项目记录
+// ======================
+// 删除项目
+// ======================
 
 function removeProject(name){
 
@@ -395,8 +526,10 @@ function removeProject(name){
 
     projects =
         projects.filter(
+
             p =>
             p.name !== name
+
         );
 
 
@@ -410,25 +543,18 @@ function removeProject(name){
 
 
 
-
-
 module.exports={
 
 
     registerProject,
 
-
     findProject,
-
 
     listProjects,
 
-
     readProjectFiles,
 
-
     getProjectInfo,
-
 
     removeProject
 

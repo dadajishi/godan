@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>梁好 - 个人介绍</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- 背景动态粒子效果 -->
+    <div id="bg-canvas"></div>
+
+    <!-- 主容器 -->
+    <main class="container">
+        <!-- 3D卡片区域 -->
+        <div class="card-wrapper" id="cardWrapper">
+            <div class="card" id="card">
+                <!-- 正面 -->
+                <div class="card-face card-front">
+                    <div class="profile-header">
+                        <div class="avatar">梁</div>
+                        <h1>梁好</h1>
+                        <p class="subtitle">创意开发者 / 设计爱好者</p>
+                    </div>
+                    <div class="profile-info">
+                        <p>热爱技术，追求极致体验</p>
+                        <p>专注于前端开发与交互设计</p>
+                    </div>
+                    <div class="hint">点击卡片翻转</div>
+                </div>
+                <!-- 背面 -->
+                <div class="card-face card-back">
+                    <h2>关于我</h2>
+                    <p>我是梁好，一名充满热情的开发者，喜欢探索新技术，创造优雅的解决方案。</p>
+                    <div class="skills">
+                        <span>HTML</span>
+                        <span>CSS</span>
+                        <span>JavaScript</span>
+                        <span>Three.js</span>
+                    </div>
+                    <div class="contact">
+                        <p>📧 lianghao@example.com</p>
+                        <p>📍 中国</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

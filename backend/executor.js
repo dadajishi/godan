@@ -26,8 +26,10 @@ async function execute(input){
 
         data =
         typeof input==="string"
-        ? JSON.parse(input)
-        : input;
+        ?
+        JSON.parse(input)
+        :
+        input;
 
 
     }catch(e){
@@ -41,14 +43,6 @@ async function execute(input){
 
 
 
-
-    /*
-    =====================
-    判断创建/修改
-    =====================
-    */
-
-
     let projectDir;
     let projectName;
 
@@ -57,25 +51,15 @@ async function execute(input){
     if(data.path){
 
 
-        // 修改已有项目
-
-        console.log(
-            "🩹修改已有项目:",
-            data.path
-        );
-
-
         projectDir=data.path;
 
         projectName =
         path.basename(projectDir);
 
 
+    }
+    else{
 
-    }else{
-
-
-        // 创建新项目
 
         const title =
         data.title || "Godan_Project";
@@ -115,6 +99,7 @@ async function execute(input){
 
 
 
+
     if(
         !data.files ||
         !Array.isArray(data.files)
@@ -129,12 +114,12 @@ async function execute(input){
 
 
 
+
     let indexFile=null;
 
 
 
     for(const file of data.files){
-
 
 
         const filePath =
@@ -152,7 +137,6 @@ async function execute(input){
         );
 
 
-
         fs.writeFileSync(
             filePath,
             file.content,
@@ -160,13 +144,8 @@ async function execute(input){
         );
 
 
-
         console.log(
-            data.path
-            ?
-            "🩹修改文件:"
-            :
-            "📄创建文件:",
+            "📄写入:",
             filePath
         );
 
@@ -189,17 +168,143 @@ async function execute(input){
 
 
 
-    let testResult=null;
+    /*
+    ===========================
+    自动识别Electron
+    ===========================
+    */
+
+
+    let isElectron=false;
+
+
+    const packageFile =
+    path.join(
+        projectDir,
+        "package.json"
+    );
 
 
 
-    if(indexFile){
+    if(fs.existsSync(packageFile)){
+
+
+        try{
+
+
+            const pkg =
+            JSON.parse(
+                fs.readFileSync(
+                    packageFile,
+                    "utf8"
+                )
+            );
+
+
+            if(
+                pkg.dependencies?.electron ||
+                pkg.devDependencies?.electron ||
+                pkg.main
+            ){
+
+                isElectron=true;
+
+            }
+
+
+        }catch(e){}
+
+
+
+    }
+
+
+
+
+
+    /*
+    ===========================
+    Electron启动
+    ===========================
+    */
+
+
+    if(isElectron){
 
 
         console.log(
-            "🧪开始测试..."
+            "🖥️检测到Electron项目"
         );
 
+
+        exec(
+            `cd "${projectDir}" && npm install && npm start`,
+            (error)=>{
+
+
+                if(error){
+
+                    console.log(
+                        "❌Electron失败:",
+                        error.message
+                    );
+
+                }
+                else{
+
+                    console.log(
+                        "🚀Electron启动成功"
+                    );
+
+                }
+
+
+            }
+        );
+
+
+
+    }
+
+
+
+    /*
+    ===========================
+    Web启动
+    ===========================
+    */
+
+
+    else if(indexFile){
+
+
+        console.log(
+            "🌐启动网页"
+        );
+
+
+        exec(
+            `open "${indexFile}"`,
+            ()=>{
+
+                console.log(
+                    "🌐浏览器打开"
+                );
+
+            }
+        );
+
+
+    }
+
+
+
+
+
+    let testResult=null;
+
+
+    if(indexFile){
 
         try{
 
@@ -216,28 +321,7 @@ async function execute(input){
 
         }
 
-
     }
-
-
-
-
-
-    if(indexFile){
-
-
-        exec(
-            `open "${indexFile}"`,
-            ()=>{
-                console.log(
-                    "🚀浏览器打开"
-                );
-            }
-        );
-
-
-    }
-
 
 
 
@@ -251,7 +335,12 @@ async function execute(input){
 
             path:projectDir,
 
-            type:"web_app"
+            type:
+            isElectron
+            ?
+            "desktop_app"
+            :
+            "web_app"
 
         });
 
@@ -262,19 +351,22 @@ async function execute(input){
 
     return {
 
-
         success:true,
 
         project:projectName,
 
         path:projectDir,
 
-        modified:!!data.path,
+        type:
+        isElectron
+        ?
+        "desktop_app"
+        :
+        "web_app",
 
-        opened:!!indexFile,
+        opened:isElectron || !!indexFile,
 
         test:testResult
-
 
     };
 

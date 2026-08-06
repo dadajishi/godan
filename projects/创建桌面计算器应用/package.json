@@ -1,0 +1,18 @@
+{
+  "name": "desktop-calculator",
+  "version": "1.0.0",
+  "description": "A simple desktop calculator built with Electron",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "author": "Godan AI",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^37.2.6",
+    "electron-builder": "^26.15.3"
+  },
+  "allowScripts": {
+    "electron@37.2.6": true
+  }
+}

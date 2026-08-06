@@ -1,23 +1,44 @@
 {
-  "name": "backend",
+  "name": "godan-desktop",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Godan Desktop Calculator App",
+  "main": "main.js",
+  "author": "Godan",
+  "license": "MIT",
+
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "dependencies": {
-    "axios": "^1.18.1",
-    "better-sqlite3": "^12.11.1",
-    "cors": "^2.8.6",
-    "dotenv": "^17.4.2",
-    "express": "^5.2.1",
-    "ollama": "^0.6.3",
-    "openai": "^7.2.0",
-    "playwright": "^1.62.1"
+
+  "keywords": [
+    "calculator",
+    "electron",
+    "macos",
+    "godan"
+  ],
+
+  "devDependencies": {
+    "electron": "^37.2.6",
+    "electron-builder": "^26.0.12"
+  },
+
+  "build": {
+    "appId": "com.godan.calculator",
+    "productName": "Godan计算器",
+
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": [
+        "dmg"
+      ],
+      "icon": "icon.icns"
+    },
+
+    "files": [
+      "**/*",
+      "!node_modules/.cache"
+    ]
   }
 }

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>天气应用</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app">
+        <header class="header">
+            <div class="search-container">
+                <input type="text" id="cityInput" placeholder="输入城市名称..." autocomplete="off">
+                <button id="searchBtn" aria-label="搜索">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                </button>
+            </div>
+            <button id="locationBtn" class="location-btn" aria-label="使用当前位置">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                    <circle cx="12" cy="10" r="3"></circle>
+                </svg>
+            </button>
+        </header>
+
+        <main class="main">
+            <div class="current-weather">
+                <div class="location">
+                    <h1 id="cityName">--</h1>
+                    <p id="date">--</p>
+                </div>
+                <div class="temperature">
+                    <span id="temp">--</span>
+                    <span class="unit">°C</span>
+                </div>
+                <div class="condition">
+                    <img id="weatherIcon" src="" alt="天气图标">
+                    <span id="description">--</span>
+                </div>
+                <div class="details">
+                    <div class="detail-item">
+                        <span class="label">体感温度</span>
+                        <span id="feelsLike">--</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="label">湿度</span>
+                        <span id="humidity">--</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="label">风速</span>
+                        <span id="wind">--</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="label">气压</span>
+                        <span id="pressure">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="forecast">
+                <h2>未来5天预报</h2>
+                <div id="forecastList" class="forecast-list">
+                    <!-- 动态生成 -->
+                </div>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <p>数据来源: OpenWeatherMap | 使用Mock数据模式</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

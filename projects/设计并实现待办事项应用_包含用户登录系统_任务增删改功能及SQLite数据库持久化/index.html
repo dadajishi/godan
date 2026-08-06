@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>待办事项应用</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- 登录界面 -->
+        <div id="login-section" class="section">
+            <h2>用户登录</h2>
+            <input type="text" id="login-username" placeholder="用户名" autocomplete="username">
+            <input type="password" id="login-password" placeholder="密码" autocomplete="current-password">
+            <button id="login-btn">登录</button>
+            <button id="register-btn">注册</button>
+            <p id="login-message" class="message"></p>
+        </div>
+
+        <!-- 待办事项界面 -->
+        <div id="todo-section" class="section" style="display:none;">
+            <div class="header">
+                <h2>待办事项</h2>
+                <span id="current-user"></span>
+                <button id="logout-btn">退出登录</button>
+            </div>
+            <div class="todo-input">
+                <input type="text" id="todo-input" placeholder="添加新任务...">
+                <button id="add-btn">添加</button>
+            </div>
+            <ul id="todo-list"></ul>
+        </div>
+    </div>
+
+    <!-- SQLite 数据库脚本 -->
+    <script src="https://cdn.jsdelivr.net/npm/sql.js@1.8.0/dist/sql-wasm.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

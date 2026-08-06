@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>离线缓存与低频请求优化应用</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>离线缓存与低频请求优化应用</h1>
+        <div class="status-bar">
+            <span id="network-status">检测中...</span>
+            <span id="cache-status">缓存: 未知</span>
+        </div>
+    </header>
+
+    <main>
+        <section class="controls">
+            <button id="fetch-data-btn">获取数据</button>
+            <button id="clear-cache-btn">清除缓存</button>
+            <button id="simulate-offline-btn">模拟离线</button>
+            <button id="simulate-online-btn">恢复在线</button>
+        </section>
+
+        <section class="data-view">
+            <h2>数据列表</h2>
+            <div id="data-container">
+                <p class="placeholder">暂无数据，请点击"获取数据"按钮。</p>
+            </div>
+        </section>
+
+        <section class="request-log">
+            <h2>请求日志</h2>
+            <ul id="log-list"></ul>
+        </section>
+    </main>
+
+    <script src="script.js"></script>
+</body>
+</html>

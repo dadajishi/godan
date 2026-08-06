@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图片压缩工具</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🖼️ 图片压缩工具</h1>
+        <p class="subtitle">本地压缩，不上传服务器，保护隐私</p>
+        
+        <div class="upload-area" id="uploadArea">
+            <input type="file" id="fileInput" accept="image/*" multiple>
+            <div class="upload-content">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                <p>拖拽图片到此处或 <span>点击上传</span></p>
+                <small>支持 JPG / PNG / WebP / GIF，可多选</small>
+            </div>
+        </div>
+
+        <div class="controls" id="controls" style="display:none;">
+            <div class="quality-control">
+                <label>压缩质量：<span id="qualityValue">80</span>%</label>
+                <input type="range" id="qualitySlider" min="1" max="100" value="80">
+            </div>
+            <div class="format-control">
+                <label>输出格式：</label>
+                <select id="formatSelect">
+                    <option value="image/jpeg">JPEG</option>
+                    <option value="image/webp">WebP</option>
+                    <option value="image/png">PNG</option>
+                </select>
+            </div>
+            <button id="compressAllBtn" class="btn-primary">压缩全部</button>
+        </div>
+
+        <div class="image-list" id="imageList"></div>
+
+        <div class="result" id="result" style="display:none;">
+            <h2>压缩结果</h2>
+            <div class="summary" id="summary"></div>
+            <button id="downloadAllBtn" class="btn-secondary">下载全部 (ZIP)</button>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

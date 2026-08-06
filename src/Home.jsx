@@ -1,66 +1,184 @@
-import { useEffect, useRef, useState } from "react";
 import "./styles/godan.css";
-
-const API_URL = "http://localhost:3001/chat";
-
+import { useEffect, useRef, useState } from "react";
 export default function Home() {
-    const [input, setInput] = useState("");
-    const [messages, setMessages] = useState([
-        { role: "agent", content: "你好，我是 Godan Agent。告诉我你想创建什么，我会规划、生成并执行项目。" }
-    ]);
-    const [status, setStatus] = useState("ready");
-    const endRef = useRef(null);
-
-    useEffect(() => endRef.current?.scrollIntoView({ behavior: "smooth" }), [messages, status]);
-
-    async function sendMessage(value = input) {
-        const message = value.trim();
-        if (!message || status === "working") return;
-        setMessages((items) => [...items, { role: "user", content: message }]);
-        setInput("");
-        setStatus("working");
-
-        try {
-            const response = await fetch(API_URL, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message })
-            });
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.reply || "服务暂时不可用");
-            const reply = typeof data.reply === "string" ? data.reply : JSON.stringify(data.reply, null, 2);
-            setMessages((items) => [...items, { role: "agent", content: reply }]);
-            setStatus("ready");
-        } catch (error) {
-            setMessages((items) => [...items, { role: "agent", content: "无法连接 Godan 后端：" + error.message, error: true }]);
-            setStatus("offline");
-        }
+  const [messages, setMessages] = useState([
+    {
+      role: "assistant",
+      content: "你好，我是狗蛋 Agent 🐶，有什么可以帮你做的？"
     }
+  ]);
 
-    const label = status === "working" ? "工作中 · 正在处理" : status === "offline" ? "连接异常 · 请检查后端" : "在线 · 等待任务";
+  const [input, setInput] = useState("");
+  const [status, setStatus] = useState("");
+  const endRef = useRef(null);
 
-    return (
-        <div className="app-shell">
-            <aside className="sidebar glass">
-                <div className="brand"><b>G</b><div><small>LOCAL AI AGENT</small><strong>Godan</strong></div></div>
-                <section className="agent-card"><small>AGENT STATUS</small><i className={"dot " + status}></i><h2>{status === "working" ? "Processing" : status === "offline" ? "Offline" : "Ready"}</h2><p>{label}</p></section>
-                <section className="workflow"><small>WORKFLOW</small><p><span>01</span> Planner <b>●</b></p><p><span>02</span> Builder <b>●</b></p><p><span>03</span> Executor <b>●</b></p></section>
-                <div className="model">● Qwen3:4B · Local</div>
-            </aside>
-            <main className="console glass">
-                <header><div><small>AGENT CONSOLE</small><h1>让 Godan 开始创造</h1></div><span className={"live " + status}>● {label}</span></header>
-                <section className="chat">
-                    <div className="session">NEW SESSION <i></i></div>
-                    {messages.map((item, index) => <article className={"message " + item.role + (item.error ? " error" : "")} key={index}><div className="avatar">{item.role === "user" ? "You" : "G"}</div><div><small>{item.role === "user" ? "你的需求" : "Godan Agent"}</small><pre>{item.content}</pre></div></article>)}
-                    {status === "working" && <article className="message agent"><div className="avatar">G</div><div><small>Godan Agent</small><pre className="thinking">● ● ● 正在分析需求并调用 Agent 工作流…</pre></div></article>}
-                    <div ref={endRef}></div>
-                </section>
-                <footer>
-                    <div className="suggestions">{["创建一个天气应用", "做一个个人作品集", "生成待办事项工具"].map((text) => <button key={text} onClick={() => sendMessage(text)} disabled={status === "working"}>{text}</button>)}</div>
-                    <div className="composer"><textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); sendMessage(); } }} placeholder="描述你要创建的应用、页面或任务…" rows="1" disabled={status === "working"} /><button onClick={() => sendMessage()} disabled={!input.trim() || status === "working"}>↑</button></div>
-                    <p>Enter 发送 · Shift + Enter 换行 · Godan 使用本地 Agent 服务</p>
-                </footer>
-            </main>
+  useEffect(() => {
+    endRef.current?.scrollIntoView({
+      behavior: "smooth"
+    });
+  }, [messages, status]);
+
+  async function sendMessage() {
+    if (!input.trim()) return;
+
+    const text = input;
+
+    setMessages((m) => [
+      ...m,
+      {
+        role: "user",
+        content: text
+      }
+    ]);
+
+    setInput("");
+    setStatus("狗蛋思考中...");
+
+    try {
+      const res = await fetch("http://localhost:3001/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          message: text
+        })
+      });
+
+      const data = await res.json();
+
+      let reply = "收到 🐶";
+
+      if (data.reply?.plan?.reply) {
+        reply = data.reply.plan.reply;
+      } else if (typeof data.reply === "string") {
+        reply = data.reply;
+      } else {
+        reply = JSON.stringify(data.reply, null, 2);
+      }
+
+      setMessages((m) => [
+        ...m,
+        {
+          role: "assistant",
+          content: reply
+        }
+      ]);
+
+    } catch (err) {
+      setMessages((m) => [
+        ...m,
+        {
+          role: "assistant",
+          content:
+            "连接狗蛋后端失败，请确认 backend 已启动 🐶"
+        }
+      ]);
+
+      console.error(err);
+
+    } finally {
+      setStatus("");
+    }
+  }
+
+  return (
+    <div style={{
+      height: "100vh",
+      display: "flex",
+      flexDirection: "column",
+      background: "#111",
+      color: "white",
+      fontFamily: "system-ui"
+    }}>
+
+      <div style={{
+        padding: "20px",
+        fontSize: "24px",
+        fontWeight: "bold"
+      }}>
+        🐶 Godan AI
+      </div>
+
+
+      <div style={{
+        flex: 1,
+        overflowY: "auto",
+        padding: "20px"
+      }}>
+
+        {messages.map((msg, i) => (
+          <div
+            key={i}
+            style={{
+              marginBottom: "15px",
+              padding: "12px",
+              borderRadius: "12px",
+              background:
+                msg.role === "user"
+                  ? "#2563eb"
+                  : "#222"
+            }}
+          >
+            {msg.content}
+          </div>
+        ))}
+
+        <div ref={endRef}></div>
+
+      </div>
+
+
+      <div style={{
+        display: "flex",
+        padding: "15px",
+        gap: "10px"
+      }}>
+
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              sendMessage();
+            }
+          }}
+          placeholder="输入消息..."
+          style={{
+            flex: 1,
+            padding: "12px",
+            borderRadius: "10px",
+            border: "none"
+          }}
+        />
+
+
+        <button
+          onClick={sendMessage}
+          style={{
+            padding: "12px 20px",
+            borderRadius: "10px",
+            border: "none",
+            cursor: "pointer"
+          }}
+        >
+          发送
+        </button>
+
+      </div>
+
+
+      {
+        status &&
+        <div style={{
+          padding: "10px",
+          textAlign: "center",
+          opacity: 0.7
+        }}>
+          {status}
         </div>
-    );
+      }
+
+    </div>
+  );
 }

@@ -4,40 +4,32 @@ const axios = require("axios");
 
 
 async function Builder({
+
     task,
     architecture,
     plan,
-    mode = "create",
-    existingProject = null,
-    files = []
-}) {
+    filePlan,
+    mode="create",
+    existingProject=null,
+    files=[]
+
+}){
 
 
-    console.log("🏗️ Builder task:", {
-        task,
-        mode,
-        architecture,
-        plan
-    });
-
-
-
-    try {
-
-
-        if(!task){
-            throw new Error("缺少task");
+    console.log(
+        "🏗️ Builder task:",
+        {
+            task,
+            mode
         }
+    );
 
 
-        if(!architecture){
-            throw new Error("缺少architecture");
-        }
-
+    try{
 
 
         const apiKey =
-            process.env.DEEPSEEK_API_KEY;
+        process.env.DEEPSEEK_API_KEY;
 
 
 
@@ -51,22 +43,17 @@ async function Builder({
 
 
 
-        let updateContext = "";
+        let context="";
 
 
 
-        if(mode === "update"){
+        if(mode==="modify"){
 
 
-            console.log(
-                "🔄 Builder进入更新模式"
-            );
+            context=`
 
-
-            updateContext = `
-
-当前模式:
-UPDATE（修改已有项目）
+当前任务:
+修改已有项目
 
 
 已有项目:
@@ -81,24 +68,17 @@ null,
 已有文件:
 
 ${JSON.stringify(
-files.map(f=>({
-    path:f.path,
-    content:f.content.slice(0,2000)
-})),
+files,
 null,
 2
 )}
 
 
-更新规则:
+规则:
 
-1. 必须基于已有项目修改
-2. 保留原有功能
-3. 只增加或修改用户要求部分
-4. 不允许创建新的项目主题
-5. 必须返回完整files数组
-6. 返回的files必须包含修改后的完整代码
-
+1. 保留原功能
+2. 只修改需求部分
+3. 返回完整文件
 
 `;
 
@@ -108,38 +88,14 @@ null,
 
 
 
-        const prompt = `
+        const prompt=`
 
-你是一个专业的软件工程师。
-
-
-你的任务是根据用户需求开发软件。
+你是 Godan AI 软件工程师。
 
 
-最高优先级规则：
-
-必须完全服从用户任务。
-
-
-禁止：
-
-- 修改用户需求
-- 替换项目类型
-- 创造新的需求
-- 使用历史任务
-- 把一个项目变成另一个项目
-
-
-当前项目:
-
-${architecture.project}
-
-
-
-用户需求:
+任务:
 
 ${task}
-
 
 
 项目架构:
@@ -151,7 +107,6 @@ null,
 )}
 
 
-
 开发计划:
 
 ${JSON.stringify(
@@ -161,69 +116,69 @@ null,
 )}
 
 
-${updateContext}
+${context}
 
 
 
-开发要求:
-
-1. 输出完整可运行项目文件
-2. 只能输出JSON
-3. 必须包含:
-
-title
-
-files
+只输出JSON。
 
 
-files格式:
+禁止:
 
-{
-"path":"文件路径",
-"content":"完整代码"
-}
+Markdown
+
+解释文字
+
+代码围栏
 
 
 
-如果是HTML/CSS/JavaScript项目:
-
-直接生成完整文件。
-
-
-如果需要API:
-
-必须加入Mock数据备用模式。
-
-
-禁止输出解释文字。
-
-
-禁止Markdown。
-
-
-最终格式:
+格式:
 
 {
-"title":"项目名称",
+"title":"",
 "files":[
 {
-"path":"index.html",
-"content":"完整HTML"
-},
-{
-"path":"style.css",
-"content":"完整CSS"
-},
-{
-"path":"script.js",
-"content":"完整JS"
+"path":"",
+"content":""
 }
 ]
 }
 
 
+必须返回完整files。
+如果用户需求包含:
+
+桌面
+桌面应用
+桌面软件
+Electron
+Mac应用
+Windows软件
+App客户端
+
+那么:
+
+type必须返回:
+
+desktop_app
+
+stack必须包含:
+
+Electron
+HTML
+CSS
+JavaScript
+
+dependencies包含:
+
+electron
+
+不要返回web。
 
 `;
+
+
 
 
 
@@ -232,60 +187,111 @@ files格式:
         );
 
 
+        console.log(
+            "🔑 Key长度:",
+            apiKey.length
+        );
+
+
+        console.log(
+            "📦 Prompt长度:",
+            prompt.length
+        );
+
+
+
+
 
         const response =
         await axios.post(
 
             "https://api.deepseek.com/chat/completions",
 
+
             {
 
-                model:"deepseek-chat",
+                model:
+                "deepseek-chat",
+
 
                 messages:[
 
                     {
+
                         role:"system",
+
                         content:
-                        "你是严格的软件工程Agent，只执行用户需求，不允许改变任务。"
+                        "你是严格JSON代码生成Agent"
+
                     },
 
 
                     {
+
                         role:"user",
-                        content:prompt
+
+                        content:
+                        prompt
+
                     }
+
 
                 ],
 
 
-                temperature:0.2
+                temperature:
+                0.1,
+
+
+                max_tokens:
+                4000,
+
+
+                stream:false
+
 
             },
 
 
             {
 
+
                 headers:{
+
 
                     Authorization:
                     `Bearer ${apiKey}`,
 
+
                     "Content-Type":
                     "application/json"
+
 
                 },
 
 
-                timeout:120000
+                timeout:
+                120000
+
 
             }
+
 
         );
 
 
 
-        let content =
+
+
+        console.log(
+            "📡 DeepSeek状态:",
+            response.status
+        );
+
+
+
+
+        let text =
         response.data
         .choices[0]
         .message
@@ -295,31 +301,79 @@ files格式:
 
         console.log(
             "🧠 DeepSeek原始:",
-            content.slice(0,300)
+            text.slice(0,500)
         );
 
 
 
-        content =
-        content
+
+
+        text =
+        text.replace(
+            /<think>[\s\S]*?<\/think>/gi,
+            ""
+        );
+
+
+
+        text =
+        text
         .replace(/```json/g,"")
+        .replace(/```javascript/g,"")
+        .replace(/```html/g,"")
+        .replace(/```css/g,"")
         .replace(/```/g,"")
         .trim();
 
 
 
-        const result =
-        JSON.parse(content);
+
+
+        const start =
+        text.indexOf("{");
+
+
+        const end =
+        text.lastIndexOf("}");
 
 
 
-        if(!result.files){
+        if(
+            start!==-1 &&
+            end!==-1
+        ){
 
-            throw new Error(
-                "DeepSeek没有返回files"
+            text =
+            text.substring(
+                start,
+                end+1
             );
 
         }
+
+
+
+
+
+        const result =
+        JSON.parse(text);
+
+
+
+
+
+        if(
+            !result.files ||
+            !Array.isArray(result.files)
+        ){
+
+            throw new Error(
+                "DeepSeek返回没有files"
+            );
+
+        }
+
+
 
 
 
@@ -334,6 +388,7 @@ files格式:
 
 
 
+
     }catch(error){
 
 
@@ -345,15 +400,21 @@ files格式:
 
         return {
 
-            error:"builder failed"
+            files:[],
+
+            error:
+            error.message
 
         };
 
+
     }
+
 
 
 }
 
 
 
-module.exports = Builder;
+module.exports =
+Builder;

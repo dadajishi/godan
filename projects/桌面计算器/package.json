@@ -1,0 +1,14 @@
+{
+  "name": "desktop-calculator",
+  "version": "1.0.0",
+  "description": "A simple desktop calculator built with Electron",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^31.0.0"
+  }
+}

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能待办事项管理</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <h1>📝 智能待办事项</h1>
+            <p class="subtitle">高效管理你的每一天</p>
+        </header>
+
+        <main>
+            <!-- 添加待办表单 -->
+            <form id="todo-form" class="todo-form">
+                <input type="text" id="todo-input" placeholder="输入新的待办事项..." autocomplete="off" required>
+                <select id="priority-select">
+                    <option value="low">低优先级</option>
+                    <option value="medium" selected>中优先级</option>
+                    <option value="high">高优先级</option>
+                </select>
+                <button type="submit" class="btn-add">添加</button>
+            </form>
+
+            <!-- 筛选栏 -->
+            <div class="filter-bar">
+                <button class="filter-btn active" data-filter="all">全部</button>
+                <button class="filter-btn" data-filter="active">进行中</button>
+                <button class="filter-btn" data-filter="completed">已完成</button>
+            </div>
+
+            <!-- 待办列表 -->
+            <ul id="todo-list" class="todo-list"></ul>
+
+            <!-- 统计信息 -->
+            <div class="stats">
+                <span id="total-count">总计: 0</span>
+                <span id="completed-count">已完成: 0</span>
+                <span id="pending-count">待完成: 0</span>
+            </div>
+        </main>
+    </div>
+
+    <!-- 引入JavaScript -->
+    <script src="app.js"></script>
+</body>
+</html>

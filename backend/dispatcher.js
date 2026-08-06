@@ -7,8 +7,14 @@ const Builder = require("./builder");
 const PatchBuilder = require("./patchBuilder");
 const Reviewer = require("./reviewer");
 const Executor = require("./executor");
+
+const Manager = require("./agents/manager");
+
 const ProjectManager = require("./projectManager");
-const CodeAnalyzer = require("./codeAnalyzer");
+const Memory = require("./memory/memory");
+
+
+
 
 
 async function dispatch(aiResult){
@@ -18,6 +24,7 @@ async function dispatch(aiResult){
         "⚙️ dispatcher收到:",
         aiResult
     );
+
 
 
     if(!aiResult || !aiResult.task){
@@ -30,7 +37,10 @@ async function dispatch(aiResult){
     }
 
 
-    const task = aiResult.task;
+
+    const task =
+    aiResult.task;
+
 
 
     console.log(
@@ -40,16 +50,29 @@ async function dispatch(aiResult){
 
 
 
+    Memory.update({
+
+        task,
+
+        status:"dispatching",
+
+        errors:[]
+
+    });
+
+
+
     try{
 
 
-        let mode = "create";
+        let mode="create";
 
-        let existingProject = null;
+        let existingProject=null;
 
 
 
-        const modifyWords = [
+        const modifyWords=[
+
             "修改",
             "增加",
             "添加",
@@ -58,24 +81,20 @@ async function dispatch(aiResult){
             "改成",
             "加入",
             "支持",
-            "调整",
-            "修复"
+            "夜间",
+            "模式"
+
         ];
 
 
 
-        /*
-        =====================
-        判断创建 / 修改
-        =====================
-        */
-
 
         if(
             modifyWords.some(
-                word=>task.includes(word)
+                w=>task.includes(w)
             )
         ){
+
 
             mode="modify";
 
@@ -91,43 +110,60 @@ async function dispatch(aiResult){
 
 
 
+            if(!existingProject){
+
+
+                console.log(
+                    "🔍尝试项目模糊匹配"
+                );
+
+
+                const projects =
+                ProjectManager.listProjects();
+
+
+
+                existingProject =
+                projects.find(
+                    p=>{
+
+                        const name =
+                        p.name;
+
+
+                        const words =
+                        task.split("");
+
+
+
+                        return words.some(
+                            c =>
+                            name.includes(c)
+                        );
+
+
+                    }
+                );
+
+            }
+
+
+
+
             if(existingProject){
 
 
                 console.log(
-                    "📁找到已有项目:",
+                    "📁找到项目:",
                     existingProject.name
                 );
 
 
 
-                try{
-
-
-                    existingProject.files =
-                    CodeAnalyzer.analyzeProject(
-                        existingProject.path
-                    ).files;
-
-
-
-                    console.log(
-                        "📄项目分析完成:",
-                        existingProject.files.length,
-                        "个文件"
-                    );
-
-
-                }catch(err){
-
-
-                    console.log(
-                        "⚠️项目分析失败:",
-                        err.message
-                    );
-
-
-                }
+                existingProject.files =
+                ProjectManager.readProjectFiles(
+                    existingProject.path
+                );
 
 
 
@@ -135,7 +171,7 @@ async function dispatch(aiResult){
 
 
                 console.log(
-                    "⚠️没有找到项目，切换创建模式"
+                    "⚠️没有找到项目，转创建"
                 );
 
 
@@ -145,17 +181,21 @@ async function dispatch(aiResult){
             }
 
 
+
         }
 
 
 
 
-
         /*
-        =====================
         Architect
-        =====================
         */
+
+
+        Memory.update({
+            status:"architecting"
+        });
+
 
 
         console.log(
@@ -163,30 +203,40 @@ async function dispatch(aiResult){
         );
 
 
+
         const architecture =
         await Architect(task);
 
 
 
-        architecture.mode = mode;
+        architecture.mode =
+        mode;
+
+
+
+        Memory.update({
+            architecture
+        });
 
 
 
         console.log(
-            "🏛️Architect:",
-            architecture
+            "🏛️Architect完成"
         );
 
 
 
 
 
-
         /*
-        =====================
         Planner
-        =====================
         */
+
+
+        Memory.update({
+            status:"planning"
+        });
+
 
 
         console.log(
@@ -194,66 +244,78 @@ async function dispatch(aiResult){
         );
 
 
+
         const plan =
         await Planner(task);
 
 
 
-        console.log(
-            "🧠Planner:",
+        Memory.update({
             plan
+        });
+
+
+
+        console.log(
+            "🧠Planner完成"
         );
 
 
 
 
 
+
         /*
-        =====================
-        Builder / PatchBuilder
-        =====================
+        Manager
         */
+
+
+        console.log(
+            "🤖进入ManagerAgent"
+        );
+
+
+
+        const agentResult =
+        await Manager({
+
+            task,
+
+            architecture,
+
+            plan
+
+        });
+
+
+
+        console.log(
+            "🤖Manager完成"
+        );
+
+
+
+
 
 
         let buildResult;
 
 
-        if(
-            mode==="modify"
-            &&
-            existingProject
-        ){
+
+        /*
+        ===================
+        CREATE
+        ===================
+        */
 
 
-            console.log(
-                "🩹进入PatchBuilder"
-            );
-
-
-
-            buildResult =
-            await PatchBuilder.buildPatch(
-                existingProject,
-                task
-            );
-
-
-
-            buildResult.project =
-            existingProject.name;
-
-
-            buildResult.path =
-            existingProject.path;
-
-
-
-        }else{
+        if(mode==="create"){
 
 
             console.log(
                 "🏗️进入Builder"
             );
+
 
 
             buildResult =
@@ -265,18 +327,58 @@ async function dispatch(aiResult){
 
                 plan,
 
-                existingProject
+                agentResult
 
             });
+
 
 
         }
 
 
 
+
+
+        /*
+        ===================
+        MODIFY
+        ===================
+        */
+
+
+        else{
+
+
+            console.log(
+                "🩹进入PatchBuilder"
+            );
+
+
+
+            buildResult =
+            await PatchBuilder({
+
+                task,
+
+                project:
+                existingProject.name,
+
+                files:
+                existingProject.files
+
+            });
+
+
+
+        }
+
+
+
+
+
+
         console.log(
-            "🏗️生成结果:",
-            buildResult
+            "🏗️生成完成"
         );
 
 
@@ -284,18 +386,11 @@ async function dispatch(aiResult){
 
 
         /*
-        =====================
         Reviewer
-        =====================
         */
 
 
-        console.log(
-            "🔍进入Reviewer"
-        );
-
-
-        const reviewResult =
+        const review =
         await Reviewer(
             buildResult
         );
@@ -304,16 +399,18 @@ async function dispatch(aiResult){
 
         console.log(
             "🔍Reviewer:",
-            reviewResult
+            review
         );
 
 
 
-        if(!reviewResult.pass){
+
+
+        if(!review.pass){
 
 
             console.log(
-                "⚠️Reviewer未通过"
+                "⚠️审核未通过"
             );
 
 
@@ -323,11 +420,8 @@ async function dispatch(aiResult){
 
 
 
-
         /*
-        =====================
         Executor
-        =====================
         */
 
 
@@ -339,7 +433,9 @@ async function dispatch(aiResult){
 
         const result =
         await Executor(
-            buildResult
+            buildResult,
+            existingProject,
+            mode
         );
 
 
@@ -348,6 +444,18 @@ async function dispatch(aiResult){
             "⚙️Executor:",
             result
         );
+
+
+
+
+        Memory.update({
+
+            status:"completed",
+
+            result
+
+        });
+
 
 
 
@@ -368,8 +476,7 @@ async function dispatch(aiResult){
             plan,
 
 
-            review:
-            reviewResult,
+            review,
 
 
             result
@@ -389,6 +496,19 @@ async function dispatch(aiResult){
         );
 
 
+
+        Memory.update({
+
+            status:"error",
+
+            errors:[
+                error.message
+            ]
+
+        });
+
+
+
         return {
 
             success:false,
@@ -401,9 +521,10 @@ async function dispatch(aiResult){
     }
 
 
-
 }
 
 
 
-module.exports = dispatch;
+
+module.exports =
+dispatch;
