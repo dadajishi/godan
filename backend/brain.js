@@ -1,19 +1,9 @@
-const axios = require("axios");
+// brain.js — Godan v2 Lite D3: 意图路由（走统一模型抽象层）
+const llm = require("./llm");
 
 console.log("🔥 brain.js加载成功");
 
-async function brain(message) {
-
-    try {
-
-        const response = await axios.post(
-            "http://localhost:11434/api/chat",
-            {
-                model: "qwen3:4b",
-                messages: [
-                    {
-                        role: "system",
-                        content: `
+const BRAIN_SYSTEM_PROMPT = `
 你是狗蛋Agent的大脑。
 
 你的职责：
@@ -32,68 +22,32 @@ async function brain(message) {
 禁止Markdown。
 禁止<think>。
 禁止任何多余文字。
-`
-                    },
-                    {
-                        role: "user",
-                        content: message
-                    }
-                ],
-                stream: false
-            }
-        );
+`;
 
-        let text = response.data.message.content || "";
+async function brain(message) {
 
-        console.log("🧠 Qwen原始输出：");
-        console.log(text);
+    try {
 
-        // 删除 think
-        text = text.replace(/<think>[\s\S]*?<\/think>/gi, "");
+        // D3: 统一走模型抽象层（用户配置 > .env），支持任意 OpenAI 兼容端点
+        const obj = await llm.chat({
+            system: BRAIN_SYSTEM_PROMPT,
+            user: message,
+            temperature: 0.3,
+            maxTokens: 2000,
+            json: true
+        });
 
-        // 删除 markdown
-        text = text.replace(/```json/gi, "");
-        text = text.replace(/```/g, "");
-
-        // 去掉 BOM
-        text = text.replace(/^\uFEFF/, "");
-
-        // 去掉空格
-        text = text.trim();
-
-        // 如果还有其它废话，只截取第一个JSON
-        const start = text.indexOf("{");
-        const end = text.lastIndexOf("}");
-
-        if (start !== -1 && end !== -1) {
-            text = text.substring(start, end + 1);
-        }
-
-        console.log("🧹 清理后：");
-        console.log(text);
-
-        try {
-
-            const obj = JSON.parse(text);
-
+        if (obj && obj.tool && obj.task) {
             console.log("✅ Brain解析成功：");
             console.log(obj);
-
             return obj;
-
-        } catch (err) {
-
-            console.log("❌ JSON解析失败：");
-            console.log(err.message);
-
-            console.log("⚠️ 使用默认plan");
-
-            return {
-                tool: "plan",
-                task: message
-            };
-
         }
+
+        console.log("❌ Brain返回结构异常，使用默认plan");
+        return {
+            tool: "plan",
+            task: message
+        };
 
     } catch (err) {
 
@@ -105,7 +59,6 @@ async function brain(message) {
         };
 
     }
-
 }
 
 module.exports = brain;

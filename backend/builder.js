@@ -1,6 +1,6 @@
 console.log("🏗️ Builder模块加载");
 
-const axios = require("axios");
+const llm = require("./llm");
 
 
 async function Builder({
@@ -26,21 +26,6 @@ async function Builder({
 
 
     try{
-
-
-        const apiKey =
-        process.env.DEEPSEEK_API_KEY;
-
-
-
-        if(!apiKey){
-
-            throw new Error(
-                "缺少 DEEPSEEK_API_KEY"
-            );
-
-        }
-
 
 
         let context="";
@@ -182,14 +167,8 @@ electron
 
 
 
-        console.log(
-            "🔥 发送DeepSeek..."
-        );
-
-
-        console.log(
-            "🔑 Key长度:",
-            apiKey.length
+          console.log(
+            "🔥 发送LLM..."
         );
 
 
@@ -199,164 +178,17 @@ electron
         );
 
 
+        // D3: 统一走模型抽象层
+        const result = await llm.chat({
+            system: "你是严格JSON代码生成Agent",
+            user: prompt,
+            temperature: 0.1,
+            maxTokens: 4000,
+            json: true
+        });
 
 
 
-        const response =
-        await axios.post(
-
-            "https://api.deepseek.com/chat/completions",
-
-
-            {
-
-                model:
-                "deepseek-chat",
-
-
-                messages:[
-
-                    {
-
-                        role:"system",
-
-                        content:
-                        "你是严格JSON代码生成Agent"
-
-                    },
-
-
-                    {
-
-                        role:"user",
-
-                        content:
-                        prompt
-
-                    }
-
-
-                ],
-
-
-                temperature:
-                0.1,
-
-
-                max_tokens:
-                4000,
-
-
-                stream:false
-
-
-            },
-
-
-            {
-
-
-                headers:{
-
-
-                    Authorization:
-                    `Bearer ${apiKey}`,
-
-
-                    "Content-Type":
-                    "application/json"
-
-
-                },
-
-
-                timeout:
-                120000
-
-
-            }
-
-
-        );
-
-
-
-
-
-        console.log(
-            "📡 DeepSeek状态:",
-            response.status
-        );
-
-
-
-
-        let text =
-        response.data
-        .choices[0]
-        .message
-        .content;
-
-
-
-        console.log(
-            "🧠 DeepSeek原始:",
-            text.slice(0,500)
-        );
-
-
-
-
-
-        text =
-        text.replace(
-            /<think>[\s\S]*?<\/think>/gi,
-            ""
-        );
-
-
-
-        text =
-        text
-        .replace(/```json/g,"")
-        .replace(/```javascript/g,"")
-        .replace(/```html/g,"")
-        .replace(/```css/g,"")
-        .replace(/```/g,"")
-        .trim();
-
-
-
-
-
-        const start =
-        text.indexOf("{");
-
-
-        const end =
-        text.lastIndexOf("}");
-
-
-
-        if(
-            start!==-1 &&
-            end!==-1
-        ){
-
-            text =
-            text.substring(
-                start,
-                end+1
-            );
-
-        }
-
-
-
-
-
-        const result =
-        JSON.parse(text);
 
 
 

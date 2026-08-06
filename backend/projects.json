@@ -236,5 +236,12 @@
     "type": "web_app",
     "created": "2026-08-04T05:04:06.048Z",
     "lastModified": "2026-08-04T05:04:06.048Z"
+  },
+  {
+    "name": "贪吃蛇小游戏",
+    "path": "/Users/lianghao/Desktop/Godan/projects/贪吃蛇小游戏",
+    "type": "web_app",
+    "created": "2026-08-06T05:37:37.321Z",
+    "lastModified": "2026-08-06T05:37:37.321Z"
   }
 ]
