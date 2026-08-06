@@ -7,11 +7,30 @@ const path = require("path");
 const fs = require("fs");
 
 const IS_DEV = !app.isPackaged;
-const API_PORT = process.env.GODAN_PORT || 3001;
+const net = require("net");
+let API_PORT = parseInt(process.env.GODAN_PORT || "3001", 10);
 let backendProc = null;
 
+// 探测端口是否被占用
+function isPortFree(port) {
+    return new Promise((resolve) => {
+        const srv = net.createServer();
+        srv.once("error", () => resolve(false));
+        srv.once("listening", () => srv.close(() => resolve(true)));
+        srv.listen(port, "127.0.0.1");
+    });
+}
+
+// 找到第一个空闲端口（避免与用户已启动的其他服务冲突）
+async function findFreePort(startPort) {
+    for (let p = startPort; p < startPort + 20; p++) {
+        if (await isPortFree(p)) return p;
+    }
+    return startPort; // 全部占用则用起始端口（后端会报错，窗口仍可打开）
+}
+
 // 启动内置后端（仅生产模式；开发模式由用户自行启动 backend）
-function startBackend() {
+async function startBackend() {
     if (IS_DEV) return;
 
     const backendEntry = path.join(__dirname, "backend", "server.js");
@@ -20,6 +39,7 @@ function startBackend() {
         return;
     }
 
+    API_PORT = await findFreePort(API_PORT);
     console.log("🚀 启动内置后端 :" + API_PORT);
     backendProc = spawn(process.execPath, [backendEntry], {
         cwd: app.getPath("userData"),   // 打包后 backend 在 asar 内只读，cwd 必须用真实可写目录
@@ -70,8 +90,9 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-    startBackend();
-    createWindow();
+    startBackend().then(() => {
+        createWindow();
+    });
 
     app.on("activate", () => {
         if (BrowserWindow.getAllWindows().length === 0) createWindow();

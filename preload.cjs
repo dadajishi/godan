@@ -1,11 +1,11 @@
 // preload.cjs — Godan v2 Lite D8: 安全桥接层
 // 通过 contextBridge 暴露最小 API，渲染进程无法直接访问 Node
+// 注意: sandbox:true 下 preload 禁止 require 任意文件，只能用 process 等受限 API
 const { contextBridge } = require("electron");
 
 contextBridge.exposeInMainWorld("godan", {
-    // 版本信息（设置页可显示）
+    // 版本信息（Electron 沙箱 preload 内可用 process.versions）
     version: {
-        app: require("./package.json").version || "1.0.0",
         electron: process.versions.electron,
         chrome: process.versions.chrome,
         node: process.versions.node
