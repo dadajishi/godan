@@ -7,6 +7,9 @@ const brain = require("./brain");
 const dispatch = require("./dispatcher");
 const keyStorage = require("./keyStorage");
 const llm = require("./llm");
+const ProjectManager = require("./projectManager");
+const fs = require("fs");
+const path = require("path");
 
 
 const app = express();
@@ -187,6 +190,87 @@ app.post("/api/settings/test", async (req, res) => {
     }
 });
 
+
+
+// =====================================================
+// D6: 项目列表 API
+// =====================================================
+
+// 项目列表（含大小/文件数/存在性）
+app.get("/api/projects", (req, res) => {
+    try {
+        const projects = ProjectManager.listProjects();
+        const enriched = projects.map((p) => {
+            let size = 0, fileCount = 0, exists = false;
+            try {
+                exists = fs.existsSync(p.path);
+                if (exists) {
+                    const walk = (dir) => {
+                        for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+                            if (e.name === "node_modules") continue;
+                            const full = path.join(dir, e.name);
+                            if (e.isDirectory()) walk(full);
+                            else { size += fs.statSync(full).size; fileCount++; }
+                        }
+                    };
+                    walk(p.path);
+                }
+            } catch (e) { /* 目录异常忽略 */ }
+            return {
+                name: p.name,
+                type: p.type || "web_app",
+                created: p.created || "",
+                lastModified: p.lastModified || "",
+                exists,
+                size,
+                fileCount
+            };
+        });
+        res.json({ success: true, projects: enriched });
+    } catch (err) {
+        console.error("❌ 项目列表失败:", err.message);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 删除项目（目录 + 注册表）
+app.delete("/api/projects/:name", (req, res) => {
+    try {
+        const name = decodeURIComponent(req.params.name);
+        const project = ProjectManager.findProject(name);
+        if (!project) {
+            return res.status(404).json({ success: false, error: "项目不存在: " + name });
+        }
+        ProjectManager.deleteProject(name);
+        res.json({ success: true, deleted: name });
+    } catch (err) {
+        console.error("❌ 删除项目失败:", err.message);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 打开项目（macOS open 命令打开 index.html，无则打开目录）
+app.post("/api/projects/:name/open", (req, res) => {
+    try {
+        const name = decodeURIComponent(req.params.name);
+        const project = ProjectManager.findProject(name);
+        if (!project || !fs.existsSync(project.path)) {
+            return res.status(404).json({ success: false, error: "项目不存在" });
+        }
+        const { execFile } = require("child_process");
+        const indexFile = path.join(project.path, "index.html");
+        const target = fs.existsSync(indexFile) ? indexFile : project.path;
+        execFile("open", [target], (err) => {
+            if (err) {
+                console.log("⚠️ 打开失败:", err.message);
+                return res.json({ success: false, error: err.message });
+            }
+            res.json({ success: true, opened: target });
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
 
 
 const PORT = process.env.PORT || 3001;

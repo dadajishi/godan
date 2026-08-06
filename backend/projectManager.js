@@ -567,6 +567,72 @@ function removeProject(name){
 
 
 
+// ======================
+// 删除项目（目录 + 注册表）
+// ======================
+
+function deleteProject(name){
+
+    let projects =
+        loadProjects();
+
+    const project =
+        projects.find(
+            p =>
+            p.name === name
+        );
+
+    // 删除目录（安全：仅限 projects 根下）
+    if(project && project.path){
+        const projectsRoot =
+            path.resolve(
+                path.join(
+                    __dirname,
+                    "..",
+                    "projects"
+                )
+            );
+        const target =
+            path.resolve(project.path);
+        if(
+            target.startsWith(projectsRoot + path.sep)
+        ){
+            try{
+                fs.rmSync(
+                    target,
+                    {
+                        recursive:true,
+                        force:true
+                    }
+                );
+            }catch(e){
+                console.log(
+                    "⚠️ 删除目录失败:",
+                    e.message
+                );
+            }
+        }else{
+            console.log(
+                "⛔ 拒绝删除非 projects 目录:",
+                project.path
+            );
+        }
+    }
+
+    projects =
+        projects.filter(
+            p =>
+            p.name !== name
+        );
+
+    saveProjects(projects);
+
+    return true;
+
+}
+
+
+
 module.exports={
 
 
@@ -580,7 +646,9 @@ module.exports={
 
     getProjectInfo,
 
-    removeProject
+    removeProject,
+
+    deleteProject
 
 
 };
