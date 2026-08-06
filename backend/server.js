@@ -6,6 +6,7 @@ const cors = require("cors");
 const brain = require("./brain");
 const dispatch = require("./dispatcher");
 const keyStorage = require("./keyStorage");
+const llm = require("./llm");
 
 
 const app = express();
@@ -13,7 +14,8 @@ const app = express();
 
 // 修正: CORS 收紧 — 仅允许本地前端来源，不再全开
 app.use(cors({
-    origin: ["http://localhost:5173", "http://127.0.0.1:5173", "file://"],
+    origin: ["http://localhost:5173", "http://127.0.0.1:5173",
+             "http://localhost:5174", "http://127.0.0.1:5174", "file://"],
     methods: ["POST", "GET", "DELETE"]
 }));
 app.use(express.json());
@@ -161,9 +163,33 @@ app.delete("/api/settings", async (req, res) => {
     }
 });
 
+// 测试 API Key 有效性（不保存，用临时配置发最小请求）
+app.post("/api/settings/test", async (req, res) => {
+    try {
+        const body = (req.body && typeof req.body === "object") ? req.body : {};
+        const { apiKey, baseUrl, model } = body;
+        if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
+            return res.status(400).json({ success: false, error: "apiKey 不能为空" });
+        }
+        const reply = await llm.chat({
+            system: "你是连接测试助手。收到 ping 就回复: ok",
+            user: "ping",
+            temperature: 0,
+            maxTokens: 20,
+            json: false,
+            apiKey: apiKey.trim(),
+            baseUrl: (baseUrl || "").trim(),
+            model: (model || "deepseek-chat").trim()
+        });
+        res.json({ success: true, reply: String(reply).slice(0, 50) });
+    } catch (err) {
+        res.json({ success: false, error: err.message });
+    }
+});
 
 
-const PORT = 3001;
+
+const PORT = process.env.PORT || 3001;
 
 
 const server = app.listen(PORT, "127.0.0.1", ()=>{

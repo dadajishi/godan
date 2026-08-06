@@ -79,10 +79,21 @@ function extractJson(text) {
  *   maxTokens:   输出上限 (默认 4000)
  *   json:   为 true 时返回解析后的对象（解析失败返回 null）
  *   retries: 失败重试次数 (默认 1)
+ *   apiKey/baseUrl/model: 临时覆盖配置（用于测试未保存的 key，优先级最高）
  * @returns {Promise<string|object|null>}
  */
-async function chat({ system, user, temperature = 0.7, maxTokens = 4000, json = false, retries = 1 }) {
-    const cfg = await getConfig();
+async function chat({ system, user, temperature = 0.7, maxTokens = 4000, json = false, retries = 1, apiKey: overrideKey, baseUrl: overrideBaseUrl, model: overrideModel }) {
+    // 临时覆盖配置（测试用）优先于已保存配置
+    let cfg;
+    if (overrideKey) {
+        cfg = {
+            apiKey: overrideKey,
+            baseUrl: (overrideBaseUrl || DEFAULT_BASE_URL).replace(/\/+$/, ""),
+            model: overrideModel || DEFAULT_MODEL
+        };
+    } else {
+        cfg = await getConfig();
+    }
     if (!cfg.apiKey) {
         throw new Error("未配置 API Key：请在设置页填写，或在 .env 设置 DEEPSEEK_API_KEY");
     }

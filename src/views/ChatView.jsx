@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-const API_BASE = "http://127.0.0.1:3001";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://127.0.0.1:3001";
 
 // 建议任务（点击直接填充）
 const SUGGESTIONS = [
