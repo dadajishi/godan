@@ -10,7 +10,7 @@ const ProjectManager = require("./projectManager");
 
 
 
-async function execute(input){
+async function execute(input, context){
 
 
     console.log(
@@ -18,6 +18,20 @@ async function execute(input){
         input
     );
 
+    // 修正: 接收 mode/existingProject 上下文（原实现丢弃了 dispatcher 传入的这两个参数）
+    const ctx = context || {};
+    const mode = ctx.mode || "create";
+    const existingProject = ctx.existingProject || null;
+
+    // modify 模式校验: 目标项目必须存在
+    if (mode === "modify") {
+        if (!existingProject || !existingProject.path || !fs.existsSync(existingProject.path)) {
+            return {
+                success: false,
+                error: "修改目标项目不存在或路径无效: " + (existingProject && existingProject.path)
+            };
+        }
+    }
 
     let data;
 
@@ -122,11 +136,26 @@ async function execute(input){
     for(const file of data.files){
 
 
+        // 修正: 路径穿越防护 — 拒绝任何逃逸项目目录的路径
+        const rawPath = file.path || "";
         const filePath =
         path.join(
             projectDir,
-            file.path
+            rawPath
         );
+
+        const projectRoot = path.resolve(projectDir);
+        const resolvedFilePath = path.resolve(filePath);
+        if(resolvedFilePath !== projectRoot && !resolvedFilePath.startsWith(projectRoot + path.sep)){
+            console.log(
+                "⛔拦截非法路径:",
+                rawPath
+            );
+            return {
+                success:false,
+                error:"非法路径被拦截: " + rawPath
+            };
+        }
 
 
         fs.mkdirSync(
@@ -237,32 +266,32 @@ async function execute(input){
         );
 
 
-        exec(
-            `cd "${projectDir}" && npm install && npm start`,
-            (error)=>{
-
-
-                if(error){
-
-                    console.log(
-                        "❌Electron失败:",
-                        error.message
-                    );
-
-                }
-                else{
-
-                    console.log(
-                        "🚀Electron启动成功"
-                    );
-
-                }
-
-
+        // 修正: 用 spawn 参数数组替代 shell 字符串拼接，消除命令注入面
+        const { spawn } = require("child_process");
+        const npmInstall = spawn("npm", ["install"], {
+            cwd: projectDir,
+            shell: false,
+            stdio: "ignore"
+        });
+        npmInstall.on("error", (err) => {
+            console.log("❌npm install 启动失败:", err.message);
+        });
+        npmInstall.on("close", (code) => {
+            if (code === 0) {
+                console.log("🚀npm install 完成，启动应用");
+                const npmStart = spawn("npm", ["start"], {
+                    cwd: projectDir,
+                    shell: false,
+                    stdio: "ignore",
+                    detached: true
+                });
+                npmStart.on("error", (err) => {
+                    console.log("❌Electron启动失败:", err.message);
+                });
+            } else {
+                console.log("❌npm install 失败，退出码:", code);
             }
-        );
-
-
+        });
 
     }
 
@@ -282,18 +311,13 @@ async function execute(input){
             "🌐启动网页"
         );
 
-
-        exec(
-            `open "${indexFile}"`,
-            ()=>{
-
-                console.log(
-                    "🌐浏览器打开"
-                );
-
-            }
-        );
-
+        // 修正: 参数数组方式打开文件，避免路径注入
+        spawn("open", [indexFile], {
+            shell: false,
+            stdio: "ignore"
+        }).on("error", (err) => {
+            console.log("❌打开网页失败:", err.message);
+        });
 
     }
 

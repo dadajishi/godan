@@ -12,9 +12,18 @@ const file = path.join(
 
 function read(){
 
-    return JSON.parse(
-        fs.readFileSync(file,"utf8")
-    );
+    // 修正: 容错 — 文件损坏/不存在时返回默认状态，不再抛异常拖垮整个服务
+    try{
+        return JSON.parse(
+            fs.readFileSync(file,"utf8")
+        );
+    }catch(e){
+        return {
+            status:"unknown",
+            errors:[],
+            history:[]
+        };
+    }
 
 }
 

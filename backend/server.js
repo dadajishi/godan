@@ -10,7 +10,11 @@ const dispatch = require("./dispatcher");
 const app = express();
 
 
-app.use(cors());
+// 修正: CORS 收紧 — 仅允许本地前端来源，不再全开
+app.use(cors({
+    origin: ["http://localhost:5173", "http://127.0.0.1:5173", "file://"],
+    methods: ["POST", "GET"]
+}));
 app.use(express.json());
 
 
@@ -25,8 +29,15 @@ app.post("/chat", async (req, res) => {
     try {
 
 
-        const message = req.body.message;
+        // 修正: 输入校验 — 空消息直接拒绝
+        const message = (req.body && req.body.message !== undefined) ? req.body.message : null;
 
+        if (!message || typeof message !== "string" || !message.trim()) {
+            return res.status(400).json({
+                reply: "消息不能为空",
+                success: false
+            });
+        }
 
         console.log(
             "🐶 收到:",

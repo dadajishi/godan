@@ -50,6 +50,9 @@ async function dispatch(aiResult){
 
 
 
+    try{
+
+    // 修正: Memory.update 移入 try 内，写失败不再拖垮服务
     Memory.update({
 
         task,
@@ -59,11 +62,6 @@ async function dispatch(aiResult){
         errors:[]
 
     });
-
-
-
-    try{
-
 
         let mode="create";
 
@@ -114,35 +112,7 @@ async function dispatch(aiResult){
 
 
                 console.log(
-                    "🔍尝试项目模糊匹配"
-                );
-
-
-                const projects =
-                ProjectManager.listProjects();
-
-
-
-                existingProject =
-                projects.find(
-                    p=>{
-
-                        const name =
-                        p.name;
-
-
-                        const words =
-                        task.split("");
-
-
-
-                        return words.some(
-                            c =>
-                            name.includes(c)
-                        );
-
-
-                    }
+                    "⚠️没有找到匹配项目，转创建"
                 );
 
             }
@@ -357,16 +327,17 @@ async function dispatch(aiResult){
 
             buildResult =
             await PatchBuilder({
-
                 task,
-
-                project:
-                existingProject.name,
-
-                files:
-                existingProject.files
-
+                existingProject,
+                architecture,
+                plan
             });
+
+            // 修正: modify 模式必须携带原项目路径，否则 Executor 会新建目录
+            if (buildResult && !buildResult.path && existingProject) {
+                buildResult.path = existingProject.path;
+                buildResult.mode = "modify";
+            }
 
 
 
@@ -380,6 +351,25 @@ async function dispatch(aiResult){
         console.log(
             "🏗️生成完成"
         );
+
+
+        // 修正: 生成结果校验 — LLM 失败/空输出不再静默通过
+        if (!buildResult || !Array.isArray(buildResult.files) || buildResult.files.length === 0) {
+            const errMsg = (buildResult && buildResult.error) ? buildResult.error : "生成结果为空（LLM 调用失败或返回异常）";
+            console.log(
+                "❌生成校验失败:",
+                errMsg
+            );
+            Memory.update({
+                status: "error",
+                errors: [errMsg]
+            });
+            return {
+                success: false,
+                mode,
+                error: errMsg
+            };
+        }
 
 
 
@@ -434,8 +424,10 @@ async function dispatch(aiResult){
         const result =
         await Executor(
             buildResult,
-            existingProject,
-            mode
+            {
+                mode,
+                existingProject
+            }
         );
 
 
