@@ -3,7 +3,7 @@ console.log("⚙️ Executor模块加载");
 
 const fs = require("fs");
 const path = require("path");
-const { exec } = require("child_process");
+const { exec, spawn } = require("child_process");
 
 const testPage = require("./tester");
 const ProjectManager = require("./projectManager");
@@ -267,7 +267,6 @@ async function execute(input, context){
 
 
         // 修正: 用 spawn 参数数组替代 shell 字符串拼接，消除命令注入面
-        const { spawn } = require("child_process");
         const npmInstall = spawn("npm", ["install"], {
             cwd: projectDir,
             shell: false,

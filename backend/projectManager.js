@@ -227,6 +227,17 @@ function findProject(keyword){
 
 
 
+    // 修正: 中文无空格分词问题 — 补充双字组(bigram)匹配
+    function bigrams(s){
+        const out = [];
+        for(let i = 0; i < s.length - 1; i++){
+            out.push(s.slice(i, i + 2));
+        }
+        return out;
+    }
+    const keywordBigrams = new Set(bigrams(keyword.replace(/[^\u4e00-\u9fa5]/g, "")));
+
+
     let bestProject=null;
 
     let bestScore=0;
@@ -257,7 +268,20 @@ function findProject(keyword){
             }
 
 
+
+
+        // 修正: 中文匹配增强 — 完整项目名子串 + 双字组重合度
+        if(keyword.includes(name) && name.length >= 2){
+            score += 100;
         }
+        const nameBigrams = bigrams(name.replace(/[^\u4e00-\u9fa5]/g, ""));
+        let bigramHits = 0;
+        for(const bg of nameBigrams){
+            if(keywordBigrams.has(bg)) bigramHits++;
+        }
+        if(nameBigrams.length > 0){
+            score += bigramHits * 2;
+        }        }
 
 
 
