@@ -219,7 +219,7 @@ async function dispatch(aiResult){
 
 
         const plan =
-        await Planner(task);
+        await Planner(task, architecture);
 
 
 
