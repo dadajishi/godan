@@ -376,6 +376,7 @@ function readProjectFiles(projectPath){
 
 
     const files=[];
+    const skippedFiles=[];
 
 
     if(
@@ -439,6 +440,15 @@ function readProjectFiles(projectPath){
 
             }else{
 
+                // P1-3: 跳过超大文件（>200KB），避免 prompt 爆炸
+                if(stat.size > 200 * 1024){
+                    skippedFiles.push({
+                        path: path.relative(projectPath, fullPath),
+                        size: stat.size
+                    });
+                    continue;
+                }
+
 
                 try{
 
@@ -485,6 +495,12 @@ function readProjectFiles(projectPath){
 
     scan(projectPath);
 
+    if(skippedFiles.length > 0){
+        console.log(
+            "⚠️跳过超大文件:",
+            skippedFiles.map(f => f.path + " (" + Math.round(f.size/1024) + "KB)").join(", ")
+        );
+    }
 
 
     return files;

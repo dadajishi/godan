@@ -22,6 +22,17 @@ async function PatchBuilder({
 
 
 
+        // P1-3: 项目理解 — 结构化呈现文件清单与完整内容
+        const projectMeta = {
+            name: existingProject?.name || "",
+            type: existingProject?.type || "web_app",
+            path: existingProject?.path || ""
+        };
+        const fileList = (existingProject?.files || []).map(f => f.path).join("\n");
+        const fileContents = (existingProject?.files || [])
+            .map(f => `===== ${f.path} =====\n${f.content}`)
+            .join("\n\n");
+
         const prompt = `
 
 You are a code modification agent.
@@ -34,13 +45,19 @@ User request:
 ${task}
 
 
-Existing project:
+Project metadata:
 
-${JSON.stringify(
-existingProject,
-null,
-2
-)}
+${JSON.stringify(projectMeta, null, 2)}
+
+
+Project files (${(existingProject?.files || []).length} files):
+
+${fileList}
+
+
+Full file contents:
+
+${fileContents}
 
 
 Architecture:
@@ -52,12 +69,18 @@ null,
 )}
 
 
+Analysis steps (do this before writing code):
+1. Read the full file contents above carefully.
+2. Identify which files are relevant to the user request.
+3. Understand existing functions, variables, and styles before changing them.
+4. Make minimal changes that preserve existing behavior.
+
 
 Rules:
 
 1. Only modify requested parts.
 2. Keep existing functions.
-3. Return complete files.
+3. Return complete files (full content, not partial).
 4. Return JSON only.
 5. No markdown.
 6. No explanations.
@@ -75,9 +98,7 @@ Output format:
 "content":"complete file content"
 }
 ]
-
 }
-
 `;
 
 
