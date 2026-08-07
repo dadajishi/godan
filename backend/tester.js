@@ -1,11 +1,22 @@
 console.log("🧪 Tester模块加载");
 
-const { chromium } = require("playwright");
+// Web 精简版容错：playwright 缺失时跳过测试（不崩溃）
+let chromium = null;
+try {
+    ({ chromium } = require("playwright"));
+} catch (e) {
+    console.log("⚠️ playwright 不可用，测试将跳过（Web 精简版）");
+}
 
 
 async function testPage(filePath){
 
     console.log("🧪 开始测试:", filePath);
+
+    // Web 精简版：无 playwright 时跳过测试
+    if (!chromium) {
+        return { success: true, skipped: true, errors: [], warnings: [] };
+    }
 
 
     const browser = await chromium.launch({

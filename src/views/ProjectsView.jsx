@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-const API_BASE = window.godan?.apiBase || import.meta.env.VITE_API_BASE || "http://127.0.0.1:3001";
+import { API_BASE } from "../config";
 
 function formatSize(bytes) {
   if (bytes === 0) return "0 B";

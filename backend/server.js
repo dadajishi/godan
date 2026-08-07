@@ -24,9 +24,14 @@ const app = express();
 
 // 修正: CORS 收紧 — 仅允许本地前端来源，不再全开
 app.use(cors({
-    origin: ["http://localhost:5173", "http://127.0.0.1:5173",
-             "http://localhost:5174", "http://127.0.0.1:5174",
-             "http://localhost:5175", "http://127.0.0.1:5175", "file://"],
+    origin: (origin, cb) => {
+        // 允许: 本地开发端口 / file:// / 局域网任意 IP:5174(Web/手机版)
+        if (!origin || origin === "file://" || origin === "null") return cb(null, true);
+        const allowLocal = /^https?:\/\/(localhost|127\.0\.0\.1):(517[3-5])$/.test(origin);
+        const allowLan = /^https?:\/\/\d{1,3}(\.\d{1,3}){3}:5174$/.test(origin);
+        if (allowLocal || allowLan) return cb(null, true);
+        return cb(new Error("CORS 拒绝: " + origin), false);
+    },
     methods: ["POST", "GET", "DELETE", "PUT"]
 }));
 app.use(express.json());
@@ -402,10 +407,11 @@ app.put("/api/projects/:name/file", (req, res) => {
 const PORT = process.env.PORT || 3001;
 
 
-const server = app.listen(PORT, "127.0.0.1", ()=>{
+const HOST = process.env.HOST || "127.0.0.1";
+const server = app.listen(PORT, HOST, ()=>{
 
     console.log(
-        "🐶 狗蛋 Agent启动：http://127.0.0.1:3001"
+        `🐶 狗蛋 Agent启动：http://${HOST}:${PORT}`
     );
 
 });

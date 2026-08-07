@@ -1,6 +1,6 @@
 import { useNavigate, useParams } from "react-router-dom";
 
-const API_BASE = window.godan?.apiBase || import.meta.env.VITE_API_BASE || "http://127.0.0.1:3001";
+import { API_BASE } from "../config";
 // 预览 iframe 指向后端静态服务（与 API 同源同端口）
 const PREVIEW_BASE = API_BASE;
 

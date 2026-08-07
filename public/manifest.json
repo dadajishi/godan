@@ -1,0 +1,17 @@
+{
+  "name": "狗蛋 AI 应用工坊",
+  "short_name": "狗蛋",
+  "description": "说人话，AI 帮你创建/修改网页应用",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#070a12",
+  "theme_color": "#070a12",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
