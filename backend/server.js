@@ -27,7 +27,7 @@ app.use(cors({
     origin: ["http://localhost:5173", "http://127.0.0.1:5173",
              "http://localhost:5174", "http://127.0.0.1:5174",
              "http://localhost:5175", "http://127.0.0.1:5175", "file://"],
-    methods: ["POST", "GET", "DELETE"]
+    methods: ["POST", "GET", "DELETE", "PUT"]
 }));
 app.use(express.json());
 
@@ -339,6 +339,60 @@ app.post("/api/projects/:name/open", (req, res) => {
             }
             res.json({ success: true, opened: target });
         });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// =====================================================
+// 文件树编辑 API（P2: 项目文件浏览/读取/保存）
+// =====================================================
+
+// GET: 文件树（列表，含大小）
+app.get("/api/projects/:name/files", (req, res) => {
+    try {
+        const project = ProjectManager.findProject(req.params.name);
+        if (!project || !project.path || !fs.existsSync(project.path)) {
+            return res.status(404).json({ success: false, error: "项目不存在" });
+        }
+        const files = ProjectManager.readProjectFiles(project.path).map(f => ({
+            path: f.path,
+            size: Buffer.byteLength(f.content, "utf8")
+        }));
+        res.json({ success: true, files });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// GET: 读取单个文件内容（?path=相对路径）
+app.get("/api/projects/:name/file", (req, res) => {
+    try {
+        const project = ProjectManager.findProject(req.params.name);
+        if (!project || !project.path || !fs.existsSync(project.path)) {
+            return res.status(404).json({ success: false, error: "项目不存在" });
+        }
+        const relPath = req.query.path || "";
+        const r = ProjectManager.readProjectFile(project.path, relPath);
+        if (!r.ok) return res.status(400).json({ success: false, error: r.error });
+        res.json({ success: true, path: r.path, content: r.content });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// PUT: 保存文件内容（?path=相对路径, body: {content})
+app.put("/api/projects/:name/file", (req, res) => {
+    try {
+        const project = ProjectManager.findProject(req.params.name);
+        if (!project || !project.path || !fs.existsSync(project.path)) {
+            return res.status(404).json({ success: false, error: "项目不存在" });
+        }
+        const relPath = req.query.path || "";
+        const content = req.body && req.body.content;
+        const r = ProjectManager.writeProjectFile(project.path, relPath, content);
+        if (!r.ok) return res.status(400).json({ success: false, error: r.error });
+        res.json({ success: true, path: r.path });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }

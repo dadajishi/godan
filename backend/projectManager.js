@@ -644,6 +644,49 @@ function deleteProject(name){
 
 
 
+// 读取单个文件（路径防护：必须解析后仍在项目目录内）
+function readProjectFile(projectPath, relPath) {
+    try {
+        const target = path.resolve(projectPath, relPath);
+        if (!target.startsWith(path.resolve(projectPath) + path.sep) && target !== path.resolve(projectPath)) {
+            return { ok: false, error: "非法路径" };
+        }
+        if (!fs.existsSync(target) || fs.statSync(target).isDirectory()) {
+            return { ok: false, error: "文件不存在" };
+        }
+        if (fs.statSync(target).size > 500 * 1024) {
+            return { ok: false, error: "文件过大(>500KB)" };
+        }
+        return { ok: true, content: fs.readFileSync(target, "utf8"), path: path.relative(projectPath, target) };
+    } catch (e) {
+        return { ok: false, error: e.message };
+    }
+}
+
+// 写入/保存文件（路径防护：拒绝越界写入 + 禁止敏感目录）
+function writeProjectFile(projectPath, relPath, content) {
+    try {
+        if (!relPath || typeof relPath !== "string") return { ok: false, error: "路径无效" };
+        const target = path.resolve(projectPath, relPath);
+        const root = path.resolve(projectPath);
+        if (!target.startsWith(root + path.sep)) {
+            return { ok: false, error: "非法路径（越界写入被拒绝）" };
+        }
+        const banned = ["node_modules", ".git", "dist"];
+        const parts = path.relative(root, target).split(path.sep);
+        if (parts.some(p => banned.includes(p))) {
+            return { ok: false, error: "禁止写入: " + parts[0] };
+        }
+        if (typeof content !== "string") return { ok: false, error: "内容无效" };
+        fs.mkdirSync(path.dirname(target), { recursive: true });
+        fs.writeFileSync(target, content, "utf8");
+        return { ok: true, path: path.relative(root, target) };
+    } catch (e) {
+        return { ok: false, error: e.message };
+    }
+}
+
+
 module.exports={
 
 
@@ -659,7 +702,9 @@ module.exports={
 
     removeProject,
 
-    deleteProject
+    deleteProject,
+    readProjectFile,
+    writeProjectFile
 
 
 };

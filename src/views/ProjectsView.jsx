@@ -171,6 +171,9 @@ export default function ProjectsView() {
             </div>
 
             <div style={{ display: "flex", gap: "8px", flex: "none" }}>
+              <button style={btnStyle} onClick={() => navigate(`/files/${encodeURIComponent(p.name)}`)} disabled={!p.exists}>
+                ✏️ 编辑
+              </button>
               <button style={btnStyle} onClick={() => openProject(p)} disabled={!p.exists}>
                 {p.exists ? "打开" : "缺失"}
               </button>
