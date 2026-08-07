@@ -8,6 +8,7 @@ const { PROJECTS_DIR } = require("./paths");
 
 const testPage = require("./tester");
 const ProjectManager = require("./projectManager");
+const { commitProject } = require("./gitManager");
 
 
 
@@ -372,27 +373,40 @@ async function execute(input, context){
 
 
 
-    return {
 
-        success:true,
 
-        project:projectName,
+    /*
+    P1-2: 项目级 Git 版本管理
+    写盘成功后自动提交（创建/修改均可回滚）。
+    失败不阻断主流程（git 不可用时项目仍可用）。
+    */
+    let git = null;
+    try {
+        const gitMsg = mode === "modify"
+            ? "修改项目: " + projectName
+            : "创建项目: " + projectName;
+        git = await commitProject(projectDir, gitMsg);
+        if (git && git.ok && git.commit) {
+            console.log("🌿 Git提交:", git.commit, git.initialized ? "(新仓库)" : "");
+        } else if (git && !git.ok) {
+            console.log("⚠️ Git提交跳过:", git.error);
+        }
+    } catch (e) {
+        console.log("⚠️ Git提交异常:", e.message);
+        git = null;
+    }
 
-        path:projectDir,
-
-        type:
-        isElectron
-        ?
-        "desktop_app"
-        :
-        "web_app",
-
-        opened:isElectron || !!indexFile,
-
-        test:testResult
-
+    // 将 git 信息合并进返回结果（若提交失败则不阻塞）
+    const finalResult = {
+        success: true,
+        project: projectName,
+        path: projectDir,
+        type: isElectron ? "desktop_app" : "web_app",
+        opened: isElectron || !!indexFile,
+        test: testResult,
+        git
     };
-
+    return finalResult;
 
 }
 
