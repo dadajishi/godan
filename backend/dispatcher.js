@@ -51,6 +51,54 @@ async function dispatch(aiResult){
         task
     );
 
+    /*
+    =====================
+    CHAT 模式（P2 升级）
+    用户闲聊/探讨/提问 → 直接返回聊天回复，不进入建应用流程
+    =====================
+    */
+    if (aiResult.tool === "chat") {
+        console.log("💬 聊天模式");
+        // 第2步会接入 persona LLM 生成；现在先规则兜底
+        const reply = chatReply(task);
+        const result = {
+            success: true,
+            mode: "chat",
+            plan: {
+                title: "聊天",
+                type: "chat",
+                task,
+                reply,
+                plan: ["直接回复"]
+            }
+        };
+        console.log("💬 聊天回复:", reply);
+        return result;
+    }
+
+    /*
+    =====================
+    二次校验（防误判）
+    brain 判 plan 但消息没有建应用动作词 → 降级为 chat
+    =====================
+    */
+    if (aiResult.tool === "plan" && !hasBuildIntent(task)) {
+        console.log("⚠️ plan 但无建应用意图，降级为聊天:", task.slice(0, 50));
+        const reply = chatReply(task);
+        const result = {
+            success: true,
+            mode: "chat",
+            plan: {
+                title: "聊天",
+                type: "chat",
+                task,
+                reply,
+                plan: ["直接回复"]
+            }
+        };
+        return result;
+    }
+
 
 
     try{
@@ -579,6 +627,23 @@ async function dispatch(aiResult){
 
 
 
+
+// 聊天兜底回复（第2步接入 persona 后由 LLM 生成，这里仅兜底）
+function chatReply(task) {
+    if (task.includes("谢谢")) return "不客气！有需要随时叫我 🐶";
+    if (task.includes("你好") || task.includes("hello") || task.includes("hi")) return "你好！我是狗蛋 Agent 🐶，想聊天还是建个应用？";
+    if (task.includes("你是谁")) return "我是狗蛋 Agent 🐶，一个 AI 应用工坊——可以聊天，也能帮你创建/修改网页应用。";
+    if (task.includes("你叫什么")) return "狗蛋 🐶，你失忆了？";
+    return "收到，我在听你说 🐶（说「做一个XX」我就开工建应用）";
+}
+
+// 建应用意图动作词（二次校验用）
+const BUILD_VERBS = ["做一个", "做一", "做个", "生成", "帮我建", "帮我做", "写个", "写一个", "开发", "创建", "建个", "建一个", "做成", "改成", "加个", "添加", "增加", "优化", "升级", "实现", "修改", "改一下", "弄一个", "搞一个", "来一个"];
+
+function hasBuildIntent(task) {
+    if (!task || typeof task !== "string") return false;
+    return BUILD_VERBS.some(v => task.includes(v));
+}
 
 module.exports =
 dispatch;
