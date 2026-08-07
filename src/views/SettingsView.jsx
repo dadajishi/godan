@@ -21,6 +21,9 @@ export default function SettingsView() {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState(null); // {type: "ok"|"err", text}
   const [usage, setUsage] = useState(null); // 用量统计
+  const [memories, setMemories] = useState([]); // 长期记忆
+  const [memoryInput, setMemoryInput] = useState(""); // 手动添加记忆输入
+  const [memoryMsg, setMemoryMsg] = useState(null); // 记忆操作提示
 
   // 载入已保存设置
   useEffect(() => {
@@ -46,6 +49,15 @@ export default function SettingsView() {
         const data = await res.json();
         if (data.success) setUsage(data);
       } catch (e) { /* 用量不可用不阻塞 */ }
+    })();
+
+    // 载入长期记忆
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/memory`);
+        const data = await res.json();
+        if (data.success) setMemories(data.memories || []);
+      } catch (e) { /* 记忆不可用不阻塞 */ }
     })();
   }, []);
 
@@ -127,6 +139,51 @@ export default function SettingsView() {
       setModel(preset.model);
       setCustomBaseUrl(false);
     }
+  }
+
+  // 长期记忆操作
+  async function addMemory() {
+    const content = memoryInput.trim();
+    if (!content) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/memory`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMemories((prev) => [data.memory, ...prev]);
+        setMemoryInput("");
+        setMemoryMsg({ type: "ok", text: "✅ 已记住" });
+      } else {
+        setMemoryMsg({ type: "err", text: `❌ ${data.error || "添加失败"}` });
+      }
+    } catch (e) {
+      setMemoryMsg({ type: "err", text: "❌ 无法连接后端" });
+    }
+  }
+
+  async function deleteMemory(id) {
+    try {
+      const res = await fetch(`${API_BASE}/api/memory?id=${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (data.success) {
+        setMemories((prev) => prev.filter((m) => m.id !== id));
+        setMemoryMsg({ type: "ok", text: "已删除" });
+      }
+    } catch (e) { /* 忽略 */ }
+  }
+
+  async function clearAllMemories() {
+    try {
+      const res = await fetch(`${API_BASE}/api/memory`, { method: "DELETE" });
+      const data = await res.json();
+      if (data.success) {
+        setMemories([]);
+        setMemoryMsg({ type: "ok", text: `已清空 ${data.cleared} 条记忆` });
+      }
+    } catch (e) { /* 忽略 */ }
   }
 
   // 当前是否命中某个预设（用于下拉回显）
@@ -325,6 +382,67 @@ export default function SettingsView() {
             </>
           ) : (
             <p style={{ color: "#6c7690", fontSize: "12px" }}>加载用量数据…</p>
+          )}
+        </div>
+
+        <div className="session" style={{ marginTop: "30px" }}><i /> 🧠 长期记忆 <i /></div>
+        <div className="glass" style={{ padding: "24px", borderRadius: "18px" }}>
+          <p style={{ color: "#6c7690", fontSize: "12px", marginBottom: "14px" }}>
+            狗蛋会记住你的偏好（如「我喜欢深色主题」「以后都用中文命名」），生成应用时自动参考。
+            也可以手动添加：
+          </p>
+          <div style={{ display: "flex", gap: "10px", marginBottom: "16px" }}>
+            <input
+              value={memoryInput}
+              onChange={(e) => setMemoryInput(e.target.value)}
+              placeholder="例如：我喜欢深色主题"
+              style={{
+                flex: 1, padding: "10px 14px", borderRadius: "10px",
+                border: "1px solid #ffffff14", background: "#0a0e18", color: "#f2f4ff",
+                fontSize: "13px", outline: "none",
+              }}
+              onKeyDown={(e) => { if (e.key === "Enter") addMemory(); }}
+            />
+            <button onClick={addMemory} style={{
+              padding: "10px 18px", borderRadius: "10px", border: "none",
+              background: "#4f7cff", color: "#fff", fontWeight: 700, fontSize: "13px",
+              cursor: "pointer",
+            }}>记住</button>
+            {memories.length > 0 && (
+              <button onClick={clearAllMemories} style={{
+                padding: "10px 14px", borderRadius: "10px", border: "1px solid #ffffff14",
+                background: "transparent", color: "#e74c3c", fontSize: "12px", cursor: "pointer",
+              }}>清空全部</button>
+            )}
+          </div>
+          {memoryMsg && (
+            <div style={{ color: memoryMsg.type === "err" ? "#e74c3c" : "#2ecc71", fontSize: "12px", marginBottom: "12px" }}>
+              {memoryMsg.text}
+            </div>
+          )}
+          {memories.length > 0 ? (
+            <div>
+              {memories.map((m) => (
+                <div key={m.id} style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  padding: "10px 12px", marginBottom: "8px", borderRadius: "10px",
+                  border: "1px solid #ffffff0d", background: "#0a0e18",
+                }}>
+                  <div>
+                    <div style={{ color: "#e8ebf5", fontSize: "13px" }}>{m.content}</div>
+                    <div style={{ color: "#5d6785", fontSize: "10px", marginTop: "3px" }}>
+                      {m.category} · {new Date(m.createdAt).toLocaleString("zh-CN")}
+                    </div>
+                  </div>
+                  <button onClick={() => deleteMemory(m.id)} style={{
+                    padding: "6px 10px", borderRadius: "8px", border: "none",
+                    background: "#ffffff0d", color: "#e74c3c", fontSize: "11px", cursor: "pointer",
+                  }}>删除</button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p style={{ color: "#5d6785", fontSize: "12px" }}>暂无记忆。对狗蛋说「我喜欢…」「以后都…」它就会记住。</p>
           )}
         </div>
 

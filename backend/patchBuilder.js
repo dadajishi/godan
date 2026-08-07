@@ -1,6 +1,7 @@
 console.log("PatchBuilder module loaded");
 
 const llm = require("./llm");
+const Memory = require("./memory/memory");
 
 
 async function PatchBuilder({
@@ -21,6 +22,12 @@ async function PatchBuilder({
     try {
 
 
+
+        // 长期记忆注入：修改时也参考用户偏好
+        const memoryText = Memory.memoriesContext(10);
+        const memoryBlock = memoryText
+            ? `\n\n【用户长期记忆】（修改时参考这些偏好）\n${memoryText}\n`
+            : "";
 
         // P1-3: 项目理解 — 结构化呈现文件清单与完整内容
         const projectMeta = {
@@ -67,6 +74,8 @@ architecture,
 null,
 2
 )}
+
+${memoryBlock}
 
 
 Analysis steps (do this before writing code):

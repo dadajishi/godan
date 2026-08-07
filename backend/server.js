@@ -10,6 +10,7 @@ const llm = require("./llm");
 const usage = require("./usage");
 const ProjectManager = require("./projectManager");
 const createPreviewServer = require("./previewServer");
+const Memory = require("./memory/memory");
 const { PROJECTS_DIR, ensureDataDirs } = require("./paths");
 const fs = require("fs");
 const path = require("path");
@@ -205,6 +206,50 @@ app.post("/api/settings/test", async (req, res) => {
     }
 });
 
+
+
+// =====================================================
+// 长期记忆 API
+// =====================================================
+// GET: 查看记忆
+app.get("/api/memory", (req, res) => {
+    try {
+        res.json({ success: true, memories: Memory.getMemories() });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// POST: 手动添加记忆
+app.post("/api/memory", (req, res) => {
+    try {
+        const { content, category } = req.body || {};
+        if (!content || !String(content).trim()) {
+            return res.status(400).json({ success: false, error: "记忆内容不能为空" });
+        }
+        const r = Memory.addMemory({ content: String(content).trim(), source: "user", category: category || "general" });
+        if (!r.ok) return res.status(400).json({ success: false, error: r.error });
+        res.json({ success: true, memory: r.memory });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// DELETE: 清除记忆（全部 或 指定 id）
+app.delete("/api/memory", (req, res) => {
+    try {
+        const id = req.query.id;
+        if (id) {
+            const r = Memory.removeMemory(id);
+            res.json({ success: r.ok, removed: r.removed });
+        } else {
+            const r = Memory.clearMemories();
+            res.json({ success: true, cleared: r.cleared });
+        }
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
 
 
 // =====================================================

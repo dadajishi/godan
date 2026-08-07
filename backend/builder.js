@@ -1,6 +1,7 @@
 console.log("🏗️ Builder模块加载");
 
 const llm = require("./llm");
+const Memory = require("./memory/memory");
 
 
 async function Builder({
@@ -69,6 +70,17 @@ null,
 
         }
 
+        // 长期记忆注入：让生成的应用参考用户偏好
+        const memoryText = Memory.memoriesContext(10);
+        const memoryBlock = memoryText
+            ? `
+
+【用户长期记忆】（生成代码时参考这些偏好）
+${memoryText}
+`
+            : "";
+
+
 
 
 
@@ -76,6 +88,7 @@ null,
         const prompt=`
 
 你是 Godan AI 软件工程师。
+${memoryBlock}
 
 
 任务:
