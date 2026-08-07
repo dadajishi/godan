@@ -7,6 +7,7 @@ const brain = require("./brain");
 const dispatch = require("./dispatcher");
 const keyStorage = require("./keyStorage");
 const llm = require("./llm");
+const usage = require("./usage");
 const ProjectManager = require("./projectManager");
 const createPreviewServer = require("./previewServer");
 const { PROJECTS_DIR, ensureDataDirs } = require("./paths");
@@ -23,7 +24,8 @@ const app = express();
 // 修正: CORS 收紧 — 仅允许本地前端来源，不再全开
 app.use(cors({
     origin: ["http://localhost:5173", "http://127.0.0.1:5173",
-             "http://localhost:5174", "http://127.0.0.1:5174", "file://"],
+             "http://localhost:5174", "http://127.0.0.1:5174",
+             "http://localhost:5175", "http://127.0.0.1:5175", "file://"],
     methods: ["POST", "GET", "DELETE"]
 }));
 app.use(express.json());
@@ -203,6 +205,18 @@ app.post("/api/settings/test", async (req, res) => {
     }
 });
 
+
+
+// =====================================================
+// P2-1: 用量统计 API
+// =====================================================
+app.get("/api/usage", (req, res) => {
+    try {
+        res.json({ success: true, ...usage.summary() });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
 
 
 // =====================================================

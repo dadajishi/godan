@@ -4,6 +4,7 @@
 // 特性: JSON 提取（深度计数法，正确处理嵌套）、自动重试、错误归一化
 const axios = require("axios");
 const keyStorage = require("./keyStorage");
+const usage = require("./usage");
 
 const DEFAULT_BASE_URL = "https://api.deepseek.com";
 const DEFAULT_MODEL = "deepseek-chat";
@@ -125,6 +126,18 @@ async function chat({ system, user, temperature = 0.7, maxTokens = 4000, json = 
 
             const content = (response.data.choices && response.data.choices[0] &&
                 response.data.choices[0].message) ? response.data.choices[0].message.content : "";
+
+            // P2-1: 记录用量（tokens 来自 API usage 字段）
+            try {
+                const u = response.data.usage || {};
+                usage.record({
+                    model: cfg.model,
+                    promptTokens: u.prompt_tokens || 0,
+                    completionTokens: u.completion_tokens || 0,
+                    durationMs: response.config && response.config.metadata ? 0 : 0,
+                    caller: "llm.chat"
+                });
+            } catch (e) { /* 用量记录失败不影响主流程 */ }
 
             if (json) {
                 const parsed = extractJson(content);

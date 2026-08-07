@@ -20,6 +20,7 @@ export default function SettingsView() {
   const [keyHint, setKeyHint] = useState("");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState(null); // {type: "ok"|"err", text}
+  const [usage, setUsage] = useState(null); // 用量统计
 
   // 载入已保存设置
   useEffect(() => {
@@ -36,6 +37,15 @@ export default function SettingsView() {
       } catch (e) {
         setStatus({ type: "err", text: "无法连接后端，请确认 backend 已启动" });
       }
+    })();
+
+    // 载入用量统计
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/usage`);
+        const data = await res.json();
+        if (data.success) setUsage(data);
+      } catch (e) { /* 用量不可用不阻塞 */ }
     })();
   }, []);
 
@@ -274,6 +284,48 @@ export default function SettingsView() {
               </button>
             )}
           </div>
+        </div>
+
+        <div className="session" style={{ marginTop: "30px" }}><i /> 用量统计 <i /></div>
+        <div className="glass" style={{ padding: "24px", borderRadius: "18px" }}>
+          {usage ? (
+            <>
+              <div style={{ display: "flex", gap: "12px", marginBottom: "16px", flexWrap: "wrap" }}>
+                {[
+                  { label: "累计调用", value: `${usage.total?.calls ?? 0} 次` },
+                  { label: "累计 Tokens", value: `${Math.round((usage.total?.tokens ?? 0) / 1000)}K` },
+                  { label: "累计费用", value: `$${(usage.total?.costUsd ?? 0).toFixed(4)}` },
+                  { label: "今日调用", value: `${usage.today?.calls ?? 0} 次` },
+                ].map((s) => (
+                  <div key={s.label} style={{
+                    flex: 1, minWidth: "120px", padding: "14px", borderRadius: "12px",
+                    border: "1px solid #ffffff14", background: "#0a0e18",
+                  }}>
+                    <div style={{ color: "#6c7690", fontSize: "11px", marginBottom: "6px" }}>{s.label}</div>
+                    <div style={{ fontSize: "18px", fontWeight: 800, color: "#f2f4ff" }}>{s.value}</div>
+                  </div>
+                ))}
+              </div>
+              {usage.recent && usage.recent.length > 0 && (
+                <div>
+                  <div style={{ color: "#6c7690", fontSize: "11px", marginBottom: "8px" }}>最近调用</div>
+                  {usage.recent.slice(0, 5).map((r, i) => (
+                    <div key={i} style={{
+                      display: "flex", justifyContent: "space-between", padding: "6px 4px",
+                      borderBottom: "1px solid #ffffff0d", fontSize: "12px",
+                    }}>
+                      <span style={{ color: "#b6bfd3" }}>{r.model} · {r.caller}</span>
+                      <span style={{ color: "#6c7690" }}>
+                        {r.tokens.toLocaleString()} tokens · ${r.costUsd.toFixed(4)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <p style={{ color: "#6c7690", fontSize: "12px" }}>加载用量数据…</p>
+          )}
         </div>
 
         <div className="session" style={{ marginTop: "30px" }}><i /> 说明 <i /></div>
