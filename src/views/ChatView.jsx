@@ -99,25 +99,15 @@ export default function ChatView() {
         </div>
 
         {messages.map((msg, i) => (
-          <div key={i} className={`message ${msg.role} ${msg.error ? "error" : ""}`}>
-            <div className="avatar">{msg.role === "user" ? "🧑" : "🐶"}</div>
+          <div key={i} className={`message ${msg.role} ${msg.error ? "error" : ""} msg-anim`} style={{ animationDelay: `${Math.min(i * 70, 400)}ms` }}>
+            <div className={`avatar ${msg.role === "user" ? "" : "dog-avatar"}`}>{msg.role === "user" ? "🧑" : "🐶"}</div>
             <div>
               <small>{msg.role === "user" ? "你" : "狗蛋"}</small>
               <pre>{msg.content}</pre>
               {msg.previewProject && (
                 <button
                   onClick={() => navigate(`/preview/${encodeURIComponent(msg.previewProject)}`)}
-                  style={{
-                    marginTop: "10px",
-                    padding: "9px 18px",
-                    borderRadius: "10px",
-                    border: "0",
-                    background: "linear-gradient(135deg,#8178ff,#49cac6)",
-                    color: "#071019",
-                    fontSize: "13px",
-                    fontWeight: 800,
-                    cursor: "pointer",
-                  }}
+                  className="preview-btn"
                 >
                   👁️ 查看预览
                 </button>
@@ -126,7 +116,18 @@ export default function ChatView() {
           </div>
         ))}
 
-        {status && <div className="message thinking"><div className="avatar">🐶</div><div><small>狗蛋</small><pre>{status}</pre></div></div>}
+        {status && (
+          <div className="message thinking msg-anim">
+            <div className="avatar dog-avatar">🐶</div>
+            <div>
+              <small>狗蛋</small>
+              <pre className="thinking-line">
+                <span className="typing-dots"><i /><i /><i /></span>
+                {status.replace("…", "")}
+              </pre>
+            </div>
+          </div>
+        )}
         <div ref={endRef} />
       </div>
 
