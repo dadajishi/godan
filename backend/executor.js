@@ -311,8 +311,12 @@ async function execute(input, context){
             "🌐启动网页"
         );
 
-        // 修正: 参数数组方式打开文件，避免路径注入
-        spawn("open", [indexFile], {
+        // 修正: 参数数组方式打开文件，避免路径注入；兼容 Windows(open不存在用 start)
+        const openCmd = process.platform === "win32" ? "cmd" : "open";
+        const openArgs = process.platform === "win32"
+            ? ["/c", "start", "", indexFile]
+            : [indexFile];
+        spawn(openCmd, openArgs, {
             shell: false,
             stdio: "ignore"
         }).on("error", (err) => {
