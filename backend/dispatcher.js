@@ -7,10 +7,13 @@ const Builder = require("./builder");
 const PatchBuilder = require("./patchBuilder");
 const Reviewer = require("./reviewer");
 const Executor = require("./executor");
+const repairProject = require("./repair");
+const testPage = require("./tester");
 
 const Manager = require("./agents/manager");
 
 const ProjectManager = require("./projectManager");
+const fs = require("fs");
 const Memory = require("./memory/memory");
 
 
@@ -437,6 +440,65 @@ async function dispatch(aiResult){
             result
         );
 
+
+
+        /*
+        P1-1: 测试修复闭环
+        Executor 已运行 Playwright 测试 (result.test)。
+        若失败 → repair 循环（最多 2 轮）：LLM 修复 → 重测
+        */
+        let repairRounds = 0;
+        const MAX_REPAIR_ROUNDS = 2;
+        let repairLog = [];
+
+        while (
+            result &&
+            result.success === true &&
+            result.test &&
+            result.test.success === false &&
+            repairRounds < MAX_REPAIR_ROUNDS
+        ) {
+            repairRounds++;
+            console.log(`🔁 第 ${repairRounds} 轮修复 (测试失败)`);
+
+            const repairResult = await repairProject(
+                result.path,
+                result.test
+            );
+
+            repairLog.push({
+                round: repairRounds,
+                error: (result.test.errors || []).slice(0, 3),
+                repairResult
+            });
+
+            if (!repairResult.success || !repairResult.repaired) {
+                console.log("⛔ 修复失败，停止重试");
+                break;
+            }
+
+            // 重测（不重新打开网页）
+            try {
+                const indexFile = result.path + "/index.html";
+                if (fs.existsSync(indexFile)) {
+                    result.test = await testPage(indexFile);
+                    console.log(`🧪 第 ${repairRounds} 轮修复后测试:`, result.test.success);
+                } else {
+                    break;
+                }
+            } catch (err) {
+                console.log("❌ 重测失败:", err.message);
+                break;
+            }
+        }
+
+        if (repairRounds > 0) {
+            result.repair = {
+                rounds: repairRounds,
+                fixed: result.test && result.test.success === true,
+                log: repairLog
+            };
+        }
 
 
 
