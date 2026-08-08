@@ -38,6 +38,9 @@
       "preload.cjs",
       "dist/**",
       "backend/**",
+      "!**/node_modules/playwright/**",
+      "!**/node_modules/playwright-core/**",
+      "!**/node_modules/.bin/playwright*",
       "!backend/node_modules/.cache/**",
       "!backend/*.db"
     ],
@@ -84,7 +87,9 @@
         "preload.cjs",
         "dist/**",
         "backend/**",
-        "!backend/node_modules/playwright*",
+        "!**/node_modules/playwright/**",
+        "!**/node_modules/playwright-core/**",
+        "!**/node_modules/.bin/playwright*",
         "!backend/node_modules/.cache/**",
         "!backend/*.db"
       ]
