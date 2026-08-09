@@ -11,6 +11,7 @@ const repairProject = require("./repair");
 const testPage = require("./tester");
 
 const Manager = require("./agents/manager");
+const computerAgent = require("./computerAgent");
 
 const ProjectManager = require("./projectManager");
 const persona = require("./persona");
@@ -73,6 +74,20 @@ async function dispatch(aiResult){
             }
         };
         console.log("💬 聊天回复:", reply);
+        return result;
+    }
+
+    /*
+    =====================
+    COMPUTER 模式（P-电脑操作）
+    用户要求操作电脑（打开应用/执行命令/文件操作/管理服务）
+    → computerAgent 计划-执行-观察-验证循环
+    =====================
+    */
+    if (aiResult.tool === "computer") {
+        console.log("🖥️ 电脑操作模式");
+        const result = await computerAgent(task);
+        console.log("🖥️ ComputerAgent 结果:", result.success ? "成功" : "失败", "| 步骤:", (result.steps || []).length);
         return result;
     }
 

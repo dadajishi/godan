@@ -11,6 +11,9 @@ const usage = require("./usage");
 const ProjectManager = require("./projectManager");
 const createPreviewServer = require("./previewServer");
 const Memory = require("./memory/memory");
+const computerAgent = require("./computerAgent");
+const tools = require("./tools");
+const opLog = require("./opLog");
 const { PROJECTS_DIR, ensureDataDirs } = require("./paths");
 const fs = require("fs");
 const path = require("path");
@@ -398,6 +401,55 @@ app.put("/api/projects/:name/file", (req, res) => {
         const r = ProjectManager.writeProjectFile(project.path, relPath, content);
         if (!r.ok) return res.status(400).json({ success: false, error: r.error });
         res.json({ success: true, path: r.path });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+
+// =====================================================
+// 电脑操作 Agent API（P1: 文件系统 + Shell + 应用 + 进程）
+// =====================================================
+
+// 执行电脑操作任务（自然语言）
+app.post("/api/computer", async (req, res) => {
+    try {
+        const message = (req.body && req.body.message !== undefined) ? req.body.message : null;
+        if (!message || typeof message !== "string" || !message.trim()) {
+            return res.status(400).json({ success: false, error: "任务描述不能为空" });
+        }
+        console.log("🖥️ /api/computer 收到:", message);
+        const result = await computerAgent(message);
+        res.json({ success: result.success, mode: "computer", reply: result.reply, steps: result.steps, pendingOps: result.pendingOps });
+    } catch (err) {
+        console.error("❌ /api/computer 错误:", err.message);
+        res.json({ success: false, error: err.message });
+    }
+});
+
+// 批准执行待确认操作
+app.post("/api/computer/confirm", async (req, res) => {
+    try {
+        const opId = (req.body && req.body.opId) || null;
+        if (!opId) return res.status(400).json({ success: false, error: "缺少 opId" });
+        const result = await tools.confirmOp(opId);
+        res.json({ success: result.success, result });
+    } catch (err) {
+        console.error("❌ /api/computer/confirm 错误:", err.message);
+        res.json({ success: false, error: err.message });
+    }
+});
+
+// 待确认队列（前端拉取）
+app.get("/api/computer/pending", (req, res) => {
+    res.json({ success: true, pending: tools.pendingList() });
+});
+
+// 操作日志（最近 N 条）
+app.get("/api/computer/logs", (req, res) => {
+    try {
+        const limit = Math.min(parseInt(req.query.limit || 50, 10), 200);
+        res.json({ success: true, logs: opLog.recent(limit) });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }

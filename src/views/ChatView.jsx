@@ -51,14 +51,21 @@ export default function ChatView() {
       const data = await res.json();
       let reply = "收到 🐶";
       let previewProject = null;
-      if (data.reply?.plan?.reply) {
-        reply = data.reply.plan.reply;
-      } else if (typeof data.reply === "string") {
-        reply = data.reply;
-      } else if (data.reply?.success === false) {
-        reply = `❌ ${data.reply.error || "任务失败"}`;
+      let computerSteps = null;
+      let computerPending = null;
+      const r = data.reply;
+      if (r?.mode === "computer") {
+        reply = r.reply || "任务完成";
+        computerSteps = r.steps || [];
+        computerPending = r.pendingOps || [];
+      } else if (r?.plan?.reply) {
+        reply = r.plan.reply;
+      } else if (typeof r === "string") {
+        reply = r;
+      } else if (r?.success === false) {
+        reply = `❌ ${r.error || "任务失败"}`;
       } else {
-        reply = JSON.stringify(data.reply, null, 2);
+        reply = JSON.stringify(r, null, 2);
       }
 
       // D7: 任务成功且有项目产物 → 提供预览入口
@@ -68,7 +75,7 @@ export default function ChatView() {
         reply = `${reply}\n\n✅ 项目「${projName}」已生成，点击下方按钮预览 →`;
       }
 
-      setMessages((m) => [...m, { role: "assistant", content: reply, previewProject }]);
+      setMessages((m) => [...m, { role: "assistant", content: reply, previewProject, computerSteps, computerPending }]);
     } catch (err) {
       const msg = err.name === "AbortError"
         ? "⏱️ 请求超时（超过 180 秒），请确认后端已启动且 API Key 有效"
@@ -77,6 +84,32 @@ export default function ChatView() {
       console.error(err);
     } finally {
       setStatus("");
+      setSending(false);
+    }
+  }
+
+  // 批准执行电脑操作（CONFIRM 级：删除/覆盖/停止等）
+  async function confirmOp(opId) {
+    if (!opId) return;
+    setSending(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/computer/confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ opId })
+      });
+      const data = await res.json();
+      const result = data.result || {};
+      let text;
+      if (result.success) {
+        text = `✅ 已执行: ${result.output || "完成"}`;
+      } else {
+        text = `❌ 执行失败: ${result.error || data.error || "未知错误"}`;
+      }
+      setMessages((m) => [...m, { role: "assistant", content: text }]);
+    } catch (e) {
+      setMessages((m) => [...m, { role: "assistant", content: `❌ 确认请求失败: ${e.message}`, error: true }]);
+    } finally {
       setSending(false);
     }
   }
@@ -111,6 +144,34 @@ export default function ChatView() {
                 >
                   👁️ 查看预览
                 </button>
+              )}
+              {msg.computerSteps && msg.computerSteps.length > 0 && (
+                <div style={{ marginTop: "10px", padding: "10px 12px", borderRadius: "10px", background: "#0a0e18aa", border: "1px solid #ffffff12", maxWidth: "620px" }}>
+                  <div style={{ fontSize: "11px", fontWeight: 800, color: "#727c95", letterSpacing: ".1em", marginBottom: "6px" }}>🛠️ 操作步骤</div>
+                  {msg.computerSteps.map((s, i) => (
+                    <div key={i} style={{
+                      fontSize: "12px", lineHeight: "1.7", color: s.ok ? "#a8e6ce" : s.needConfirm ? "#ffd27d" : s.blocked ? "#ff9fac" : "#ffc2ca",
+                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"
+                    }} title={`${s.tool}.${s.action}${s.error ? " — " + s.error : ""}`}>
+                      {s.ok ? "✅" : s.needConfirm ? "⏸️" : s.blocked ? "⛔" : "❌"} {i + 1}. {s.tool}.{s.action}{s.goal ? `（${s.goal}）` : ""}{s.error ? ` — ${s.error}` : ""}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {msg.computerPending && msg.computerPending.length > 0 && (
+                <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "8px", alignItems: "flex-start" }}>
+                  {msg.computerPending.map((p) => (
+                    <button
+                      key={p.opId}
+                      onClick={() => confirmOp(p.opId)}
+                      className="preview-btn"
+                      style={{ background: "linear-gradient(135deg,#ffca6b,#ff8b6b)", marginTop: 0 }}
+                    >
+                      ⚠️ 批准执行: {p.tool}.{p.action}
+                    </button>
+                  ))}
+                  <small style={{ color: "#6c7690" }}>批准后狗蛋会立即执行该操作（删除/覆盖/停止类）</small>
+                </div>
               )}
             </div>
           </div>

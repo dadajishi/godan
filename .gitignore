@@ -30,6 +30,8 @@ dist-ssr
 
 # runtime state
 state.json
+oplog.jsonl
+processes/
 
 # build artifacts
 release/
