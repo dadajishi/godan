@@ -71,6 +71,7 @@ backend/
 | P1 ✅ | 文件系统 + Shell + 应用启动 + 进程管理 + 权限 + 日志 + ReAct 循环 | ✅ 已提交 b483a6f，9 项冒烟全过 |
 | P2 ✅ | 截图(screencapture) + 鼠标/键盘(cliclick) + 窗口管理 | ✅ 已提交 26b66b2；截图 2940x1912、window.list/focus/getBounds、mouse.move、cliclick 权限全可用 |
 | P3 ✅ | 视觉理解（截图喂视觉模型）+ Agent 自主观察/操作/验证闭环 | ✅ 已提交；llm.vision + screenshot.analyze(focus/bounds) + window.getBounds 混合定位；demo 跑通「读屏→输入7→视觉验证91+77」 |
+| 异步化 ✅ | 长任务不超时：/api/tasks 提交即返回 taskId，后台执行，前端 1.5s 轮询实时步骤 | ✅ 已提交；128s 视觉任务全程无超时，15 步自主完成（打开→定位→点击7→验证）；连接断开不影响后台 |
 
 ## P3 实现要点（实测结论）
 

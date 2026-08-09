@@ -82,11 +82,13 @@ function buildUserPrompt(history) {
 /**
  * 执行电脑操作任务
  * @param {string} task 用户自然语言目标
+ * @param {object} opts {onStep?: (step, pendingOps) => void} 每执行一步回调（异步任务增量推送用）
  * @returns {Promise<{success, mode, reply, steps, pendingOps}>}
  */
-async function computerAgent(task) {
+async function computerAgent(task, opts = {}) {
     console.log("🖥️ ComputerAgent 任务:", task);
     opLog.logSession({ type: "computer_start", task });
+    const onStep = typeof opts.onStep === "function" ? opts.onStep : null;
 
     const toolSpecJson = JSON.stringify(tools.toolSpec(), null, 2);
     const steps = [];
@@ -183,6 +185,9 @@ async function computerAgent(task) {
                 break;
             }
         }
+
+        // 增量推送（异步任务模式：前端实时看到步骤与待确认项）
+        if (onStep) onStep(step, pendingOps.slice());
     }
 
     if (!finished) {

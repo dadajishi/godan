@@ -12,6 +12,7 @@ const ProjectManager = require("./projectManager");
 const createPreviewServer = require("./previewServer");
 const Memory = require("./memory/memory");
 const computerAgent = require("./computerAgent");
+const taskManager = require("./taskManager");
 const tools = require("./tools");
 const opLog = require("./opLog");
 const { PROJECTS_DIR, ensureDataDirs } = require("./paths");
@@ -401,6 +402,47 @@ app.put("/api/projects/:name/file", (req, res) => {
         const r = ProjectManager.writeProjectFile(project.path, relPath, content);
         if (!r.ok) return res.status(400).json({ success: false, error: r.error });
         res.json({ success: true, path: r.path });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+
+// =====================================================
+// 异步任务 API（长任务不超时: 提交即返回 taskId，后台执行，轮询状态）
+// =====================================================
+
+// 创建任务（立即返回 taskId，Agent 后台执行）
+app.post("/api/tasks", (req, res) => {
+    try {
+        const message = (req.body && req.body.message !== undefined) ? req.body.message : null;
+        if (!message || typeof message !== "string" || !message.trim()) {
+            return res.status(400).json({ success: false, error: "任务描述不能为空" });
+        }
+        const taskId = taskManager.createTask(message);
+        console.log("📋 任务已创建:", taskId, "|", message.slice(0, 50));
+        res.json({ success: true, taskId });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 查询任务状态（轮询：实时步骤 + 结果）
+app.get("/api/tasks/:id", (req, res) => {
+    try {
+        const task = taskManager.getTask(req.params.id);
+        if (!task) return res.status(404).json({ success: false, error: "任务不存在: " + req.params.id });
+        res.json({ success: true, task });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 任务列表（最近 N 个）
+app.get("/api/tasks", (req, res) => {
+    try {
+        const limit = Math.min(parseInt(req.query.limit || 10, 10), 50);
+        res.json({ success: true, tasks: taskManager.listTasks(limit) });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }

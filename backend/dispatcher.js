@@ -22,7 +22,7 @@ const Memory = require("./memory/memory");
 
 
 
-async function dispatch(aiResult){
+async function dispatch(aiResult, opts){
 
 
     console.log(
@@ -86,7 +86,7 @@ async function dispatch(aiResult){
     */
     if (aiResult.tool === "computer") {
         console.log("🖥️ 电脑操作模式");
-        const result = await computerAgent(task);
+        const result = await computerAgent(task, opts);
         console.log("🖥️ ComputerAgent 结果:", result.success ? "成功" : "失败", "| 步骤:", (result.steps || []).length);
         return result;
     }
