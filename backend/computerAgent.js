@@ -12,6 +12,7 @@ const opLog = require("./opLog");
 
 const MAX_STEPS = 15;
 const MAX_CONSECUTIVE_FAILURES = 3;
+const MAX_ANALYZE = 10; // 每任务 screenshot.analyze 上限（防无限看屏幕）
 
 function truncate(obj, maxLen = 300) {
     if (obj === null || obj === undefined) return obj;
@@ -67,7 +68,8 @@ ${toolSpecJson}
 【GUI 视觉闭环规则】（任务涉及点击/输入/窗口操作时强制）
 - 窗口级定位优先用系统 API：window.getBounds（应用名）→ 精确窗口位置，比视觉找窗口可靠
 - 操作屏幕前：用 screenshot.analyze 看屏幕；有窗口 bounds 时传 {bounds, focus:"目标"} 做区域分析，定位更准
-- 每次 mouse/keyboard 操作后：必须再次 screenshot.analyze（或截屏问显示屏）验证操作是否生效（对比前后屏幕状态）
+- 每次 mouse/keyboard 操作后：系统会自动执行一次验证截图并展示给你；看到验证结果后立即判断——目标状态已达成就输出 done，不确定最多再验证 1 次，绝不反复分析
+- 系统会拦截「相同参数的重复 analyze」（屏幕没变化时）和「超过 10 次的分析」：被拦截后直接执行操作或 done，不要尝试绕过
 - 验证不通过（操作没生效/点错了）：重新规划（换坐标/换元素/换方案），最多重新规划 3 次，不要无限重试
 - analyze 返回的坐标是屏幕逻辑像素，可直接用于 mouse.click 等
 - 纯文件/Shell/进程任务不需要截图，直接操作即可
@@ -97,6 +99,12 @@ async function computerAgent(task, opts = {}) {
     let llmDecisionFails = 0;
     let finished = false;
     let finalSummary = "";
+
+    // 决策审查状态（防无意义重复 analyze + GUI 后验证闭环）
+    let lastAnalyzeKey = null;   // 上次 analyze 的参数指纹（同参且屏幕未变 → 拦截）
+    let analyzeCount = 0;        // 本任务 analyze 总次数
+    let verifyPending = false;   // GUI 操作后允许再验证 1 次
+    let lastFocus = "";          // 上次 analyze 的 focus（GUI 自动验证复用）
 
     for (let stepIndex = 0; stepIndex < MAX_STEPS; stepIndex++) {
         // 历史压缩为行
@@ -154,6 +162,30 @@ async function computerAgent(task, opts = {}) {
             continue;
         }
 
+        // ===================== 决策审查（防重复 analyze / 限频） =====================
+        let blockedReason = null;
+        if (toolName === "screenshot" && action === "analyze") {
+            const key = JSON.stringify(params || {});
+            analyzeCount++;
+            if (analyzeCount > MAX_ANALYZE) {
+                blockedReason = `⚠️ 系统限制：本任务已分析屏幕 ${MAX_ANALYZE} 次（上限）。请立即执行目标操作（mouse/keyboard）或输出 done 结束任务，禁止再调用 analyze。`;
+            } else if (verifyPending) {
+                // GUI 操作后的验证窗口：放行这一次，之后不再放行
+                verifyPending = false;
+            } else if (key === lastAnalyzeKey) {
+                blockedReason = "⚠️ 系统拦截：你刚用相同参数分析过屏幕，且期间没有任何操作执行，屏幕没有变化。重复分析无意义。请直接执行目标操作（mouse/keyboard），或若目标已达成请输出 done 结束任务。";
+            }
+            lastAnalyzeKey = key;
+            if (params.focus) lastFocus = String(params.focus);
+        }
+        if (blockedReason) {
+            steps.push({ tool: toolName, action, params: truncate(params, 150), goal, level: "SAFE", ok: false, blocked: true, systemBlock: true, error: blockedReason, output: null });
+            console.log("🚫 决策拦截:", blockedReason.slice(0, 80));
+            // 被拦截不算连续失败（不是执行失败），但反馈给 LLM 下一步
+            if (onStep) onStep(steps[steps.length - 1], pendingOps.slice());
+            continue;
+        }
+
         // 执行
         const result = await tools.run(toolName, action, params);
         const step = {
@@ -184,6 +216,28 @@ async function computerAgent(task, opts = {}) {
                 finished = true;
                 break;
             }
+        }
+
+        // ===== GUI 操作成功后自动验证（一次，系统执行，不走 LLM 决策）=====
+        const isGuiAction = (toolName === "mouse" || toolName === "keyboard") && result.success === true;
+        if (isGuiAction) {
+            const verifyParams = lastFocus ? { focus: lastFocus } : {};
+            const verify = await tools.run("screenshot", "analyze", verifyParams);
+            analyzeCount++;
+            lastAnalyzeKey = JSON.stringify(verifyParams);
+            verifyPending = true; // 允许 LLM 再验证 1 次（决策审查中放行后置 false）
+            const verifyStep = {
+                tool: "screenshot", action: "analyze",
+                params: verifyParams,
+                goal: "🖥️ GUI操作后自动验证（系统执行）。请对比验证结果：若目标状态已达成（如显示屏显示了你点击的内容），立即输出 done 结束任务；若不确定最多再验证一次，不要反复分析",
+                level: "SAFE", ok: verify.success, needConfirm: false, blocked: false, opId: null,
+                output: verify.success ? String(verify.output || "").slice(0, 500) : null,
+                error: verify.error ? String(verify.error).slice(0, 500) : null,
+                forced: true
+            };
+            steps.push(verifyStep);
+            console.log("🧪 GUI操作后自动验证:", verify.success ? "完成" : "失败");
+            if (onStep) onStep(verifyStep, pendingOps.slice());
         }
 
         // 增量推送（异步任务模式：前端实时看到步骤与待确认项）
