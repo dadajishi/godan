@@ -12,6 +12,45 @@ const REQUEST_TIMEOUT = 120000;
 
 // ============ 配置解析 ============
 
+// 视觉模型判定（名字包含视觉能力关键词）
+const VISION_MODEL_RE = /(gpt-4o|gpt-4\.1|gpt-4-turbo|claude|qwen2\.5vl|qwen2-vl|llava|gemini|glm-4v|vision|minicpm)/i;
+function isVisionModel(model) {
+    return VISION_MODEL_RE.test(String(model || ""));
+}
+
+// 发现可用的视觉模型配置（优先级：当前配置支持视觉 > Ollama 本地视觉模型 > OPENAI_API_KEY）
+async function getVisionConfig() {
+    // 1. 当前配置（BYOK / .env）若本身支持视觉
+    try {
+        const cfg = await getConfig();
+        if (cfg && cfg.apiKey && isVisionModel(cfg.model)) {
+            return { baseUrl: cfg.baseUrl, model: cfg.model, apiKey: cfg.apiKey, ollamaNative: false };
+        }
+    } catch (e) { /* 继续探测 */ }
+
+    // 2. Ollama 本地视觉模型（ollama list 自动发现）
+    try {
+        const { execFile } = require("child_process");
+        const models = await new Promise((resolve) => {
+            execFile("ollama", ["list"], { timeout: 10000 }, (err, stdout) => {
+                if (err) return resolve([]);
+                resolve(stdout.split("\n").slice(1).map(l => l.trim().split(/\s+/)[0]).filter(Boolean));
+            });
+        });
+        const vision = models.find(m => VISION_MODEL_RE.test(m));
+        if (vision) {
+            return { baseUrl: "http://localhost:11434", model: vision, apiKey: "", ollamaNative: true };
+        }
+    } catch (e) { /* 继续 */ }
+
+    // 3. OPENAI_API_KEY 环境变量
+    if (process.env.OPENAI_API_KEY) {
+        return { baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini", apiKey: process.env.OPENAI_API_KEY, ollamaNative: false };
+    }
+
+    return null;
+}
+
 async function getConfig() {
     // 优先用户设置（BYOK）
     try {
@@ -83,7 +122,7 @@ function extractJson(text) {
  *   apiKey/baseUrl/model: 临时覆盖配置（用于测试未保存的 key，优先级最高）
  * @returns {Promise<string|object|null>}
  */
-async function chat({ system, user, temperature = 0.7, maxTokens = 4000, json = false, retries = 1, apiKey: overrideKey, baseUrl: overrideBaseUrl, model: overrideModel }) {
+async function chat({ system, user, temperature = 0.7, maxTokens = 4000, json = false, retries = 1, apiKey: overrideKey, baseUrl: overrideBaseUrl, model: overrideModel, images }) {
     // 临时覆盖配置（测试用）优先于已保存配置
     let cfg;
     if (overrideKey) {
@@ -105,7 +144,18 @@ async function chat({ system, user, temperature = 0.7, maxTokens = 4000, json = 
     const url = cfg.baseUrl + "/chat/completions";
     const messages = [];
     if (system) messages.push({ role: "system", content: system });
-    messages.push({ role: "user", content: user });
+    if (images && images.length) {
+        // 多模态: user content 变数组，图片 base64 内联
+        const imgParts = images.map(p => {
+            const mime = String(p).toLowerCase().endsWith(".jpg") || String(p).toLowerCase().endsWith(".jpeg")
+                ? "image/jpeg" : "image/png";
+            const b64 = require("fs").readFileSync(p).toString("base64");
+            return { type: "image_url", image_url: { url: `data:${mime};base64,${b64}` } };
+        });
+        messages.push({ role: "user", content: [{ type: "text", text: user }, ...imgParts] });
+    } else {
+        messages.push({ role: "user", content: user });
+    }
 
     let lastErr = null;
     for (let attempt = 0; attempt <= retries; attempt++) {
@@ -160,4 +210,57 @@ async function chat({ system, user, temperature = 0.7, maxTokens = 4000, json = 
     throw lastErr || new Error("LLM 调用失败");
 }
 
-module.exports = { chat, extractJson, getConfig };
+// ============ 视觉分析（P3: 屏幕理解）============
+
+/**
+ * 视觉分析一张图片
+ * @param {object} opts {imagePath, prompt, json?, temperature?}
+ * @returns {Promise<string|object|null>}
+ */
+async function vision({ imagePath, prompt, json = false, temperature = 0.1, maxTokens = 1500 }) {
+    if (!imagePath || !require("fs").existsSync(imagePath)) {
+        throw new Error("图片不存在: " + imagePath);
+    }
+    const cfg = await getVisionConfig();
+    if (!cfg) {
+        throw new Error("没有可用的视觉模型。方案：① 设置页选择支持视觉的模型（OpenAI gpt-4o-mini 等）② 安装本地视觉模型: ollama pull qwen2.5vl:3b");
+    }
+
+    const b64 = require("fs").readFileSync(imagePath).toString("base64");
+
+    // Ollama 原生多模态接口（/api/chat 支持 images 字段）
+    if (cfg.ollamaNative) {
+        const axios = require("axios");
+        const url = (cfg.baseUrl || "http://localhost:11434").replace(/\/+$/, "") + "/api/chat";
+        const r = await axios.post(url, {
+            model: cfg.model,
+            messages: [{ role: "user", content: prompt, images: [b64] }],
+            stream: false,
+            options: {
+                temperature,
+                // 关键: 截图 base64 会占大量 token，默认 n_ctx=4096 不够，放大到 16k
+                num_ctx: 16384
+            }
+        }, { timeout: 180000 });
+        const content = r.data && r.data.message && r.data.message.content;
+        if (json) return extractJson(content);
+        return content;
+    }
+
+    // OpenAI 兼容接口（content 数组内联图片）
+    const result = await chat({
+        system: "你是屏幕分析助手，严格按照要求输出。",
+        user: prompt,
+        images: [imagePath],
+        temperature,
+        maxTokens,
+        json,
+        retries: 1,
+        apiKey: cfg.apiKey,
+        baseUrl: cfg.baseUrl,
+        model: cfg.model
+    });
+    return result;
+}
+
+module.exports = { chat, extractJson, getConfig, getVisionConfig, isVisionModel, vision };

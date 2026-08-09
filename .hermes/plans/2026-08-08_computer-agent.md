@@ -69,8 +69,17 @@ backend/
 | 阶段 | 内容 | 验收 |
 |------|------|------|
 | P1 ✅ | 文件系统 + Shell + 应用启动 + 进程管理 + 权限 + 日志 + ReAct 循环 | ✅ 已提交 b483a6f，9 项冒烟全过 |
-| P2 | 截图(screencapture) + 鼠标/键盘(cliclick) + 窗口管理 | 截图 2940x1912 真实全屏 ✅；window.list/focus ✅；mouse.move ✅；键盘 type/hotkey 需焦点窗口（cliclick 已装，辅助功能权限已授予） |
-| P3 | 视觉理解（截图喂视觉模型）+ Agent 自主观察/操作/验证闭环 | 待做（需扩展 llm.js 支持图片输入） |
+| P2 ✅ | 截图(screencapture) + 鼠标/键盘(cliclick) + 窗口管理 | ✅ 已提交 26b66b2；截图 2940x1912、window.list/focus/getBounds、mouse.move、cliclick 权限全可用 |
+| P3 ✅ | 视觉理解（截图喂视觉模型）+ Agent 自主观察/操作/验证闭环 | ✅ 已提交；llm.vision + screenshot.analyze(focus/bounds) + window.getBounds 混合定位；demo 跑通「读屏→输入7→视觉验证91+77」 |
+
+## P3 实现要点（实测结论）
+
+- 视觉模型：Ollama qwen2.5vl:3b（本地，拉取 3.2GB）；llm.vision 自动发现（当前配置 > Ollama 本地视觉模型 > OPENAI key）
+- Ollama 调用需 `num_ctx: 16384`（全屏截图 base64 会超默认 4096）
+- 3B 模型局限（实测）：复杂 JSON 输出不稳定（复读模板）→ 用「描述 + 元素列表」简单格式 + 正则解析；全屏图定位小窗口不可靠 → 混合方案：window.getBounds（系统 API 精确窗口坐标）+ screenshot.analyze({bounds, focus}) 区域分析
+- Retina 坐标：screencapture 输出物理像素，cliclick 用逻辑像素，analyze 内部按 scale 换算
+- 验证闭环：读屏「91+」→ 键盘输入 7 → 视觉验证「91+77」（每次输入生效）
+- 改进方向：换更强视觉模型（qwen2.5vl:7b / gpt-4o-mini）可显著提升坐标精度与元素识别
 
 ## P2 依赖与权限（已确认）
 

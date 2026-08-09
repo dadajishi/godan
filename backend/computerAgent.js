@@ -10,8 +10,8 @@ const llm = require("./llm");
 const tools = require("./tools");
 const opLog = require("./opLog");
 
-const MAX_STEPS = 12;
-const MAX_CONSECUTIVE_FAILURES = 2;
+const MAX_STEPS = 15;
+const MAX_CONSECUTIVE_FAILURES = 3;
 
 function truncate(obj, maxLen = 300) {
     if (obj === null || obj === undefined) return obj;
@@ -55,7 +55,7 @@ ${toolSpecJson}
 
 【执行规则】
 1. 一次只调用一个工具，看完结果再决定下一步
-2. 优先用最直接的路径完成任务；先探索（list/status）再动手
+2. 优先用最直接的路径完成任务；先探索（list/status/analyze）再动手
 3. 工具结果里的 output 可能是 JSON 或文本，仔细阅读
 4. 遇到 needConfirm=true：该操作已进入「待确认队列」，不要重复调用，继续其他可做的步骤或直接 done（最后会汇总给用户确认）
 5. 遇到 blocked=true：该操作被安全策略拒绝，不要重试，换一种 SAFE 的方式或放弃该步骤
@@ -63,6 +63,14 @@ ${toolSpecJson}
 7. 删除/覆盖/停止进程等破坏性操作，工具会自动要求确认，你不需要在 params 里做任何特殊处理
 8. 所有 params 必须用绝对路径（~ 可展开）
 9. 最后必须 done 并给出中文总结
+
+【GUI 视觉闭环规则】（任务涉及点击/输入/窗口操作时强制）
+- 窗口级定位优先用系统 API：window.getBounds（应用名）→ 精确窗口位置，比视觉找窗口可靠
+- 操作屏幕前：用 screenshot.analyze 看屏幕；有窗口 bounds 时传 {bounds, focus:"目标"} 做区域分析，定位更准
+- 每次 mouse/keyboard 操作后：必须再次 screenshot.analyze（或截屏问显示屏）验证操作是否生效（对比前后屏幕状态）
+- 验证不通过（操作没生效/点错了）：重新规划（换坐标/换元素/换方案），最多重新规划 3 次，不要无限重试
+- analyze 返回的坐标是屏幕逻辑像素，可直接用于 mouse.click 等
+- 纯文件/Shell/进程任务不需要截图，直接操作即可
 `;
 }
 
