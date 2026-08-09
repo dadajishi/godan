@@ -68,9 +68,16 @@ backend/
 
 | 阶段 | 内容 | 验收 |
 |------|------|------|
-| P1 | 文件系统 + Shell + 应用启动 + 进程管理 + 权限 + 日志 + ReAct 循环 | 真实请求：打开应用/列目录/执行命令/删除需确认/sudo 被拒 |
-| P2 | 截图(screencapture) + 鼠标/键盘(辅助功能权限) + 窗口管理 | 能截图并保存；GUI 操作可用（权限受限时明确提示） |
-| P3 | 视觉理解（截图喂视觉模型）+ Agent 自主观察/操作/验证闭环 | 「打开 Blender 加载 fox_character.blend」类任务全自动完成 |
+| P1 ✅ | 文件系统 + Shell + 应用启动 + 进程管理 + 权限 + 日志 + ReAct 循环 | ✅ 已提交 b483a6f，9 项冒烟全过 |
+| P2 | 截图(screencapture) + 鼠标/键盘(cliclick) + 窗口管理 | 截图 2940x1912 真实全屏 ✅；window.list/focus ✅；mouse.move ✅；键盘 type/hotkey 需焦点窗口（cliclick 已装，辅助功能权限已授予） |
+| P3 | 视觉理解（截图喂视觉模型）+ Agent 自主观察/操作/验证闭环 | 待做（需扩展 llm.js 支持图片输入） |
+
+## P2 依赖与权限（已确认）
+
+- cliclick 5.1 已安装（brew）
+- 辅助功能权限：✅ 已授予（window.focus / mouse.move 实测成功）
+- 屏幕录制权限：✅ 已授予（截图实测成功）
+- 截图目录：DATA_ROOT/screenshots/（开发: Godan/screenshots，打包: userData/screenshots）
 
 ## 测试方式
 

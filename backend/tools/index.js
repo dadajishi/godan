@@ -12,12 +12,20 @@ const filesystem = require("./filesystem");
 const shell = require("./shell");
 const applications = require("./applications");
 const processTool = require("./process");
+const screenshot = require("./screenshot");
+const keyboard = require("./keyboard");
+const mouse = require("./mouse");
+const windowTool = require("./window");
 
 const registry = {
     filesystem,
     shell,
     applications,
-    process: processTool
+    process: processTool,
+    screenshot,
+    keyboard,
+    mouse,
+    window: windowTool
 };
 
 // ============ 待确认操作队列 ============

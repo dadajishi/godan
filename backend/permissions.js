@@ -126,6 +126,13 @@ function classify(tool, action, params = {}) {
             }
             return { level: "SAFE", reason: "" }; // start/status/list
         }
+        // P2: 截图/鼠标/键盘/窗口 —— 均为非破坏性输入输出，SAFE
+        // （真正的风险在系统权限层：屏幕录制/辅助功能权限由 macOS 控制）
+        case "screenshot":
+        case "keyboard":
+        case "mouse":
+        case "window":
+            return { level: "SAFE", reason: "" };
         default:
             return { level: "SAFE", reason: "" };
     }
