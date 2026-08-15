@@ -39,6 +39,39 @@ function resolveApp(name) {
     return n; // 找不到就交给 open -a 处理（按系统注册名）
 }
 
+// P4-1 M2: 系统注册查询（macOS，标准路径未命中时兜底）——mdfind → lsregister
+// 不硬编码任何应用，对任意应用通用
+function queryRegisteredApp(name) {
+    const base = String(name).replace(/\.app$/, "");
+    const escaped = base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new Promise((resolve) => {
+        // 1. Spotlight 索引查询（快，~100ms）
+        execFile("mdfind", ["kMDItemContentType == 'com.apple.application-bundle' && kMDItemFSName == '" + base + ".app'"], { timeout: 8000 }, (err, stdout) => {
+            const line = String(stdout || "").split("\n").map(s => s.trim()).find(Boolean);
+            if (!err && line && line.endsWith(".app")) return resolve(line);
+            // 2. LaunchServices 注册表 dump（慢但全量，~1-3s）
+            const lsregister = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister";
+            execFile(lsregister, ["-dump"], { timeout: 15000, maxBuffer: 64 * 1024 * 1024 }, (err2, out2) => {
+                if (err2 || !out2) return resolve(null);
+                const re = new RegExp("^\\s*path:\\s*(.+?" + escaped + "\\.app)", "m");
+                const m = String(out2).match(re);
+                resolve(m ? m[1] : null);
+            });
+        });
+    });
+}
+
+// P4-1 M2: 增强解析（标准路径 → 系统注册 → 裸名兜底）
+async function resolveAppAsync(name) {
+    const fast = resolveApp(name);
+    if (fast && fast !== name) return { path: fast, resolved: true }; // 标准路径命中
+    if (process.platform === "darwin") {
+        const reg = await queryRegisteredApp(name);
+        if (reg) return { path: reg, resolved: true };
+    }
+    return { path: fast, resolved: false }; // 未找到真实路径
+}
+
 async function openApp(params) {
     const name = params.name || params.app || params.target;
     if (!name) return { success: false, output: null, error: "缺少应用名 (name)", exitCode: 1 };
@@ -49,11 +82,27 @@ async function openApp(params) {
 
     try {
         if (platform === "darwin") {
-            const appPath = resolveApp(name);
-            const args = ["-a", appPath.replace(/\.app$/, "")];
+            const { path: appPath, resolved } = await resolveAppAsync(name);
+            // 关键修复（260 根因）: open -a 只能传注册名，不能传去掉 .app 的路径。
+            // 解析到真实 .app 路径 → open <路径> [file]（直接打开，可附带文件）；
+            // 未解析 → open -a <注册名> [file]（按 LaunchServices 注册名查找）
+            const args = resolved
+                ? [appPath]
+                : ["-a", appPath.replace(/\.app$/, "")];
             if (file) args.push(String(file));
             const r = await run("open", args);
-            return { success: r.ok, output: r.ok ? `已启动 ${name}${file ? " 并打开 " + file : ""}` : null, error: r.error || null, exitCode: r.ok ? 0 : 1 };
+            if (r.ok) {
+                return { success: true, output: `已启动 ${name}${file ? " 并打开 " + file : ""}${resolved ? "" : "（按系统注册名）"}`, error: null, exitCode: 0, appPath: resolved ? appPath : null };
+            }
+            if (!resolved) {
+                // 标准路径 + 系统注册都未找到 → 明确错误（避免 Agent 反复尝试同一裸名）
+                return {
+                    success: false, output: null,
+                    error: `应用「${name}」无法打开：已检查 /Applications/` + (name.replace(/\.app$/, "") + ".app") + `、~/Applications 及系统应用注册(mdfind/lsregister)，均未找到。请确认应用已安装，或提供完整 .app 路径（如 /Applications/` + name.replace(/\.app$/, "") + `.app）。原始错误: ${r.error}`,
+                    exitCode: 1, appNotFound: true
+                };
+            }
+            return { success: false, output: null, error: r.error || null, exitCode: 1, appPath };
         }
         if (platform === "win32") {
             const args = ["", name];
@@ -62,7 +111,8 @@ async function openApp(params) {
             return { success: r.ok, output: r.ok ? `已启动 ${name}` : null, error: r.error || null, exitCode: r.ok ? 0 : 1 };
         }
         // linux
-        const args = [resolveApp(name)];
+        const appPath = resolveApp(name);
+        const args = [appPath];
         if (file) args.push(String(file));
         const r = await run("xdg-open", args);
         return { success: r.ok, output: r.ok ? `已启动 ${name}` : null, error: r.error || null, exitCode: r.ok ? 0 : 1 };
