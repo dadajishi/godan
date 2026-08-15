@@ -38,3 +38,4 @@ tasks/
 # build artifacts
 release/
 usage.json
+benchmark-report.json
