@@ -402,16 +402,29 @@ function cancelTask(id) {
 }
 
 // 重试（FAILED/CANCELLED → 重新执行整个任务，同一 taskId，步骤历史保留并追加新 attempt）
-function retryTask(id) {
-    const t = tasks.get(id);
-    if (!t) return { ok: false, error: "任务不存在: " + id };
+// M1: 明确最大重试次数（MAX_RETRIES=5），超出后拒绝，防止无限重试
+const MAX_RETRIES = 5;
+
+// 纯逻辑重试判定（可独立测试）: {ok, error?}
+function canRetry(t) {
+    if (!t) return { ok: false, error: "任务不存在" };
     if (!FINAL_STATES.has(t.status)) {
         return { ok: false, error: `任务仍在执行（${t.status}），无法重试` };
     }
     if (t.status === ST.SUCCESS) {
         return { ok: false, error: "任务已成功，无需重试" };
     }
-    addLog(id, "info", `🔄 用户请求重试（attempt ${t.attempts + 1}）`);
+    if ((t.attempts || 1) >= 1 + MAX_RETRIES) {
+        return { ok: false, error: `已达到最大重试次数（${MAX_RETRIES}），无法继续重试` };
+    }
+    return { ok: true };
+}
+
+function retryTask(id) {
+    const t = tasks.get(id);
+    const r = canRetry(t);
+    if (!r.ok) return r;
+    addLog(id, "info", `🔄 用户请求重试（attempt ${t.attempts + 1}/${1 + MAX_RETRIES}）`);
     runTask(id);
     return { ok: true, status: t.status };
 }
@@ -467,7 +480,7 @@ function listTasks(limit = 10) {
 
 module.exports = {
     createTask, getTask, getTaskLogs, listTasks,
-    cancelTask, retryTask,
+    cancelTask, retryTask, canRetry, MAX_RETRIES,
     recoverFromDisk,
     ST, // 状态常量（前端/测试可用）
     serializeTask, deserializeTask, // checkpoint 序列化（供后续阶段/测试）
