@@ -86,13 +86,21 @@ function buildUserPrompt(history) {
 /**
  * 执行电脑操作任务
  * @param {string} task 用户自然语言目标
- * @param {object} opts {onStep?: (step, pendingOps) => void} 每执行一步回调（异步任务增量推送用）
- * @returns {Promise<{success, mode, reply, steps, pendingOps}>}
+ * @param {object} opts {
+ *   onStep?: (step, pendingOps) => void     每执行一步回调（异步任务增量推送用）
+ *   onStatus?: (status) => void            状态汇报（RUNNING/VERIFYING/WAITING/RETRYING/SUCCESS/FAILED/CANCELLED）
+ *   onLog?: (level, message) => void       任务日志
+ *   isCancelled?: () => boolean            取消检查（每 step 边界）
+ * }
+ * @returns {Promise<{success, mode, reply, steps, pendingOps, cancelled?}>}
  */
 async function computerAgent(task, opts = {}) {
     console.log("🖥️ ComputerAgent 任务:", task);
     opLog.logSession({ type: "computer_start", task });
     const onStep = typeof opts.onStep === "function" ? opts.onStep : null;
+    const onStatus = typeof opts.onStatus === "function" ? opts.onStatus : null;
+    const onLog = typeof opts.onLog === "function" ? opts.onLog : null;
+    const isCancelled = typeof opts.isCancelled === "function" ? opts.isCancelled : () => false;
 
     const toolSpecJson = JSON.stringify(tools.toolSpec(), null, 2);
     const steps = [];
@@ -100,7 +108,12 @@ async function computerAgent(task, opts = {}) {
     let consecutiveFailures = 0;
     let llmDecisionFails = 0;
     let finished = false;
+    let cancelled = false;
+    let finalState = "SUCCESS"; // SUCCESS | FAILED | CANCELLED
     let finalSummary = "";
+
+    // 启动即 RUNNING
+    if (onStatus) onStatus("RUNNING");
 
     // 决策审查状态（防无意义重复 analyze + GUI 后验证闭环）
     let lastAnalyzeKey = null;   // 上次 analyze 的参数指纹（同参且屏幕未变 → 拦截）
@@ -109,6 +122,16 @@ async function computerAgent(task, opts = {}) {
     let lastFocus = "";          // 上次 analyze 的 focus（GUI 自动验证复用）
 
     for (let stepIndex = 0; stepIndex < MAX_STEPS; stepIndex++) {
+        // ===== 取消检查（每 step 边界）=====
+        if (isCancelled()) {
+            cancelled = true;
+            finalState = "CANCELLED";
+            finalSummary = "任务已取消。";
+            finished = true;
+            if (onLog) onLog("warn", "⏹️ Agent 收到取消信号，停止执行");
+            break;
+        }
+
         // 历史压缩为行
         const history = steps.map((s, i) =>
             `步骤${i + 1} [${s.tool}.${s.action}] 目的:${s.goal} → ${s.ok ? "✅成功" : (s.needConfirm ? "⏸️待确认" : (s.blocked ? "⛔被拒: " + (s.error || "") : "❌失败: " + (s.error || "")))}`
@@ -133,8 +156,10 @@ async function computerAgent(task, opts = {}) {
         if (!decision || typeof decision !== "object") {
             llmDecisionFails++;
             if (llmDecisionFails >= 2) {
+                finalState = "FAILED";
                 finalSummary = "Agent 决策模块连续异常，任务中止。";
                 finished = true;
+                if (onLog) onLog("error", "Agent 决策模块连续异常，任务中止");
                 break;
             }
             continue;
@@ -143,6 +168,7 @@ async function computerAgent(task, opts = {}) {
 
         // done?
         if (decision.done) {
+            finalState = "SUCCESS";
             finalSummary = String(decision.summary || "任务完成");
             finished = true;
             break;
@@ -154,9 +180,10 @@ async function computerAgent(task, opts = {}) {
         const goal = String(decision.goal || "");
 
         if (!toolName || !action) {
-            steps.push({ tool: "agent", action: "invalid_decision", params, goal, ok: false, error: "LLM 输出缺少 tool/action", level: "SAFE" });
+            steps.push({ tool: "agent", action: "invalid_decision", params, goal, ok: false, error: "LLM 输出缺少 tool/action", level: "SAFE", startTime: Date.now(), endTime: Date.now() });
             consecutiveFailures++;
             if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+                finalState = "FAILED";
                 finalSummary = "Agent 决策异常（缺少工具/动作），任务中止。";
                 finished = true;
                 break;
@@ -181,7 +208,7 @@ async function computerAgent(task, opts = {}) {
             if (params.focus) lastFocus = String(params.focus);
         }
         if (blockedReason) {
-            steps.push({ tool: toolName, action, params: truncate(params, 150), goal, level: "SAFE", ok: false, blocked: true, systemBlock: true, error: blockedReason, output: null });
+            steps.push({ tool: toolName, action, params: truncate(params, 150), goal, level: "SAFE", ok: false, blocked: true, systemBlock: true, error: blockedReason, output: null, startTime: Date.now(), endTime: Date.now() });
             console.log("🚫 决策拦截:", blockedReason.slice(0, 80));
             // 被拦截不算连续失败（不是执行失败），但反馈给 LLM 下一步
             if (onStep) onStep(steps[steps.length - 1], pendingOps.slice());
@@ -189,11 +216,13 @@ async function computerAgent(task, opts = {}) {
         }
 
         // 执行
+        const stepStart = Date.now();
         const result = await tools.run(toolName, action, params);
         const step = {
             tool: toolName,
             action,
             params: truncate(params, 150),
+            input: truncate(params, 150),
             goal,
             level: result.level || "SAFE",
             ok: result.success === true,
@@ -201,7 +230,10 @@ async function computerAgent(task, opts = {}) {
             blocked: !!result.blocked,
             opId: result.opId || null,
             output: result.success ? String(result.output || "").slice(0, 500) : null,
-            error: result.error ? String(result.error).slice(0, 500) : null
+            error: result.error ? String(result.error).slice(0, 500) : null,
+            startTime: stepStart,
+            endTime: Date.now(),
+            retryCount: 0
         };
         steps.push(step);
         console.log(`🖥️ 步骤${stepIndex + 1}: ${toolName}.${action} →`, step.ok ? "成功" : (step.needConfirm ? "待确认" : (step.blocked ? "被拒" : "失败")));
@@ -214,8 +246,10 @@ async function computerAgent(task, opts = {}) {
         } else {
             consecutiveFailures++;
             if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+                finalState = "FAILED";
                 finalSummary = `连续 ${MAX_CONSECUTIVE_FAILURES} 步执行失败，任务中止。最后错误: ${result.error}`;
                 finished = true;
+                if (onLog) onLog("error", `连续 ${MAX_CONSECUTIVE_FAILURES} 步执行失败: ${result.error}`);
                 break;
             }
         }
@@ -231,11 +265,15 @@ async function computerAgent(task, opts = {}) {
             const verifyStep = {
                 tool: "screenshot", action: "analyze",
                 params: verifyParams,
+                input: verifyParams,
                 goal: "🖥️ GUI操作后自动验证（系统执行）。请对比验证结果：若目标状态已达成（如显示屏显示了你点击的内容），立即输出 done 结束任务；若不确定最多再验证一次，不要反复分析",
                 level: "SAFE", ok: verify.success, needConfirm: false, blocked: false, opId: null,
                 output: verify.success ? String(verify.output || "").slice(0, 500) : null,
                 error: verify.error ? String(verify.error).slice(0, 500) : null,
-                forced: true
+                forced: true,
+                startTime: Date.now(),
+                endTime: Date.now(),
+                retryCount: 0
             };
             steps.push(verifyStep);
             console.log("🧪 GUI操作后自动验证:", verify.success ? "完成" : "失败");
@@ -247,8 +285,13 @@ async function computerAgent(task, opts = {}) {
     }
 
     if (!finished) {
+        finalState = "FAILED";
         finalSummary = `已达到最大步数(${MAX_STEPS})，任务未完全完成。已完成 ${steps.filter(s => s.ok).length} 步成功操作。`;
+        if (onLog) onLog("warn", `达到最大步数(${MAX_STEPS})，任务未完全完成`);
     }
+
+    // 终态汇报（任务状态机消费: SUCCESS / FAILED / CANCELLED）
+    if (onStatus) onStatus(finalState);
 
     // 汇总回复
     let reply = finalSummary;
@@ -274,7 +317,8 @@ async function computerAgent(task, opts = {}) {
         mode: "computer",
         reply,
         steps,
-        pendingOps
+        pendingOps,
+        cancelled
     };
 }
 

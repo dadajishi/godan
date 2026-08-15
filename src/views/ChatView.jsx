@@ -45,22 +45,24 @@ export default function ChatView() {
         const data = await res.json();
         if (!data.success || !data.task) return;
         const t = data.task;
-        const running = t.status === "running";
+        const running = t.statusCompat === "running";
         const previewProject = t.result?.result?.project || null;
 
         setMessages((prev) => prev.map((m) => {
           if (m.id !== msgId) return m;
           if (running) {
-            return { ...m, running: true, steps: t.steps, pendingOps: t.pendingOps, content: `🖥️ 任务执行中…（已完成 ${t.steps.length} 步）` };
+            return { ...m, taskId, running: true, steps: t.steps, pendingOps: t.pendingOps, status: t.status, content: `🖥️ 任务执行中…（已完成 ${t.steps.length} 步）` };
           }
           return {
             ...m,
+            taskId,
             running: false,
             steps: t.steps,
             pendingOps: t.pendingOps,
             previewProject,
-            content: t.status === "error" ? `❌ 任务失败: ${t.error}` : (t.reply || "任务完成"),
-            error: t.status === "error"
+            status: t.status,
+            content: t.statusCompat === "error" ? `❌ 任务失败: ${t.error || t.reply || ""}` : t.statusCompat === "cancelled" ? "⏹️ 任务已取消" : (t.reply || "任务完成"),
+            error: t.statusCompat === "error"
           };
         }));
 
@@ -133,6 +135,56 @@ export default function ChatView() {
     }
   }
 
+  // 取消任务（P3-1: 运行中任务可取消）
+  async function cancelTask(taskId, msgId) {
+    if (!taskId) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/tasks/${taskId}/cancel`, { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        setMessages((m) => m.map((msg) => (msg.id === msgId ? { ...msg, cancelRequested: true } : msg)));
+      } else {
+        setMessages((m) => [...m, { role: "assistant", content: `⚠️ 取消失败: ${data.error || "未知错误"}`, error: true }]);
+      }
+    } catch (e) {
+      setMessages((m) => [...m, { role: "assistant", content: `❌ 取消请求失败: ${e.message}`, error: true }]);
+    }
+  }
+
+  // 重试任务（P3-1: FAILED/CANCELLED → 重新执行，同一 taskId）
+  async function retryTask(taskId, msgId) {
+    if (!taskId) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/tasks/${taskId}/retry`, { method: "POST" });
+      const data = await res.json();
+      if (!data.success) {
+        setMessages((m) => [...m, { role: "assistant", content: `⚠️ 重试失败: ${data.error || "未知错误"}`, error: true }]);
+        return;
+      }
+      setMessages((m) => m.map((msg) => (msg.id === msgId ? { ...msg, running: true, error: false, status: "RUNNING", cancelRequested: false, steps: msg.steps || [] } : msg)));
+      startPolling(taskId, msgId);
+    } catch (e) {
+      setMessages((m) => [...m, { role: "assistant", content: `❌ 重试请求失败: ${e.message}`, error: true }]);
+    }
+  }
+
+  // 状态徽标文案
+  function statusLabel(status) {
+    const map = {
+      PENDING: "排队中", PLANNING: "规划中", RUNNING: "执行中", VERIFYING: "验证中",
+      WAITING: "等待中", RETRYING: "重试中", SUCCESS: "已完成", FAILED: "失败", CANCELLED: "已取消"
+    };
+    return map[status] || status || "执行中";
+  }
+
+  function statusColor(status) {
+    const map = {
+      PENDING: "#8b93a8", PLANNING: "#8b93a8", RUNNING: "#8980ff", VERIFYING: "#58c7f3",
+      WAITING: "#ffca6b", RETRYING: "#ffca6b", SUCCESS: "#4ade80", FAILED: "#ff5d73", CANCELLED: "#8b93a8"
+    };
+    return map[status] || "#8980ff";
+  }
+
   return (
     <>
       <header>
@@ -158,8 +210,11 @@ export default function ChatView() {
               <pre>{msg.content}</pre>
               {msg.running && (
                 <div style={{ marginTop: "10px", padding: "10px 12px", borderRadius: "10px", background: "#0a0e18aa", border: "1px solid #8980ff44", maxWidth: "620px" }}>
-                  <div style={{ fontSize: "11px", fontWeight: 800, color: "#bcb9ff", letterSpacing: ".1em", marginBottom: "6px" }}>
+                  <div style={{ fontSize: "11px", fontWeight: 800, color: "#bcb9ff", letterSpacing: ".1em", marginBottom: "6px", display: "flex", alignItems: "center", gap: "8px" }}>
                     <span className="typing-dots"><i /><i /><i /></span> 🛠️ 实时执行中…（{msg.steps?.length || 0} 步）
+                    <span style={{ marginLeft: "auto", color: statusColor(msg.status), border: `1px solid ${statusColor(msg.status)}55`, borderRadius: "99px", padding: "1px 8px", letterSpacing: ".05em", fontSize: "10px" }}>
+                      {statusLabel(msg.status)}
+                    </span>
                   </div>
                   {(msg.steps || []).slice(-6).map((s, si) => (
                     <div key={si} style={{
@@ -169,6 +224,14 @@ export default function ChatView() {
                       {s.ok ? "✅" : s.needConfirm ? "⏸️" : s.blocked ? "⛔" : "❌"} {s.tool}.{s.action}{s.goal ? `（${s.goal}）` : ""}{s.error ? ` — ${s.error}` : ""}
                     </div>
                   ))}
+                  {!msg.cancelRequested && (
+                    <button
+                      onClick={() => cancelTask(msg.taskId, msg.id)}
+                      style={{ marginTop: "8px", fontSize: "11px", padding: "3px 12px", borderRadius: "99px", background: "#ff5d7322", color: "#ff9fac", border: "1px solid #ff5d7344", cursor: "pointer" }}
+                    >
+                      ⏹️ 取消任务
+                    </button>
+                  )}
                 </div>
               )}
               {msg.previewProject && (
@@ -181,7 +244,12 @@ export default function ChatView() {
               )}
               {!msg.running && msg.steps && msg.steps.length > 0 && (
                 <div style={{ marginTop: "10px", padding: "10px 12px", borderRadius: "10px", background: "#0a0e18aa", border: "1px solid #ffffff12", maxWidth: "620px" }}>
-                  <div style={{ fontSize: "11px", fontWeight: 800, color: "#727c95", letterSpacing: ".1em", marginBottom: "6px" }}>🛠️ 操作步骤（{msg.steps.length}）</div>
+                  <div style={{ fontSize: "11px", fontWeight: 800, color: "#727c95", letterSpacing: ".1em", marginBottom: "6px", display: "flex", alignItems: "center", gap: "8px" }}>
+                    🛠️ 操作步骤（{msg.steps.length}）
+                    <span style={{ marginLeft: "auto", color: statusColor(msg.status), border: `1px solid ${statusColor(msg.status)}55`, borderRadius: "99px", padding: "1px 8px", letterSpacing: ".05em", fontSize: "10px" }}>
+                      {statusLabel(msg.status)}
+                    </span>
+                  </div>
                   {msg.steps.map((s, si) => (
                     <div key={si} style={{
                       fontSize: "12px", lineHeight: "1.7", color: s.ok ? "#a8e6ce" : s.needConfirm ? "#ffd27d" : s.blocked ? "#ff9fac" : "#ffc2ca",
@@ -190,6 +258,14 @@ export default function ChatView() {
                       {s.ok ? "✅" : s.needConfirm ? "⏸️" : s.blocked ? "⛔" : "❌"} {si + 1}. {s.tool}.{s.action}{s.goal ? `（${s.goal}）` : ""}{s.error ? ` — ${s.error}` : ""}
                     </div>
                   ))}
+                  {(msg.status === "FAILED" || msg.status === "CANCELLED") && (
+                    <button
+                      onClick={() => retryTask(msg.taskId, msg.id)}
+                      style={{ marginTop: "8px", fontSize: "11px", padding: "3px 12px", borderRadius: "99px", background: "#8980ff22", color: "#bcb9ff", border: "1px solid #8980ff55", cursor: "pointer" }}
+                    >
+                      🔄 重试任务
+                    </button>
+                  )}
                 </div>
               )}
               {msg.pendingOps && msg.pendingOps.length > 0 && (

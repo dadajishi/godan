@@ -22,6 +22,9 @@ const path = require("path");
 // D8: 打包模式下确保用户数据目录存在
 ensureDataDirs();
 
+// P3-1: 启动时从磁盘恢复任务（checkpoint 持久化），运行中任务标记为中断
+taskManager.recoverFromDisk();
+
 
 const app = express();
 
@@ -443,6 +446,39 @@ app.get("/api/tasks", (req, res) => {
     try {
         const limit = Math.min(parseInt(req.query.limit || 10, 10), 50);
         res.json({ success: true, tasks: taskManager.listTasks(limit) });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 取消任务（运行中 → CANCELLED，agent 在 step 边界停止）
+app.post("/api/tasks/:id/cancel", (req, res) => {
+    try {
+        const r = taskManager.cancelTask(req.params.id);
+        if (!r.ok) return res.status(400).json({ success: false, error: r.error });
+        res.json({ success: true, status: r.status });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 重试任务（FAILED/CANCELLED → 重新执行整个任务，同一 taskId，步骤历史保留）
+app.post("/api/tasks/:id/retry", (req, res) => {
+    try {
+        const r = taskManager.retryTask(req.params.id);
+        if (!r.ok) return res.status(400).json({ success: false, error: r.error });
+        res.json({ success: true, status: r.status });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 任务日志（状态转换 + agent 事件）
+app.get("/api/tasks/:id/logs", (req, res) => {
+    try {
+        const logs = taskManager.getTaskLogs(req.params.id, parseInt(req.query.limit || 100, 10));
+        if (!logs) return res.status(404).json({ success: false, error: "任务不存在: " + req.params.id });
+        res.json({ success: true, logs });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
