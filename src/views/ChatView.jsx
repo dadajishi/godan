@@ -110,15 +110,15 @@ export default function ChatView() {
     }
   }
 
-  // 批准执行电脑操作（CONFIRM 级：删除/覆盖/停止等）
-  async function confirmOp(opId) {
+  // 批准执行电脑操作（CONFIRM 级：删除/覆盖/停止等；P3-6: 绑定 taskId 防串台）
+  async function confirmOp(opId, taskId) {
     if (!opId) return;
     setSending(true);
     try {
       const res = await fetch(`${API_BASE}/api/computer/confirm`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ opId })
+        body: JSON.stringify({ opId, taskId })
       });
       const data = await res.json();
       const result = data.result || {};
@@ -282,7 +282,7 @@ export default function ChatView() {
                   {msg.pendingOps.map((p) => (
                     <button
                       key={p.opId}
-                      onClick={() => confirmOp(p.opId)}
+                      onClick={() => confirmOp(p.opId, msg.taskId)}
                       className="preview-btn"
                       style={{ background: "linear-gradient(135deg,#ffca6b,#ff8b6b)", marginTop: 0 }}
                     >

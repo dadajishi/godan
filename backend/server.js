@@ -507,13 +507,14 @@ app.post("/api/computer", async (req, res) => {
     }
 });
 
-// 批准执行待确认操作
+// 批准执行待确认操作（P3-6: taskId 绑定防串台）
 app.post("/api/computer/confirm", async (req, res) => {
     try {
         const opId = (req.body && req.body.opId) || null;
         if (!opId) return res.status(400).json({ success: false, error: "缺少 opId" });
-        const result = await tools.confirmOp(opId);
-        res.json({ success: result.success, result });
+        const taskId = (req.body && req.body.taskId) || null;
+        const result = await tools.confirmOp(opId, { taskId });
+        res.json({ success: result.success, result, confirmedOp: result.confirmedOp || null });
     } catch (err) {
         console.error("❌ /api/computer/confirm 错误:", err.message);
         res.json({ success: false, error: err.message });

@@ -349,7 +349,13 @@ function clear(taskId) {
     if (taskId) states.delete(taskId);
 }
 
+// P3-6: 当前 AX 快照中是否存在密码框（AXSecureTextField）——权限系统判断 keyboard.type 是否敏感输入
+function hasSecureField(taskId) {
+    const st = states.get(taskId);
+    return !!(st && st.axSnapshot && (st.axSnapshot.tree || []).some(e => e.role === "AXSecureTextField"));
+}
+
 module.exports = {
     get, summarize, refresh: invalidate, invalidate, invalidateForAction,
-    captureTree, clear, probeFrontmost, TTL
+    captureTree, clear, hasSecureField, probeFrontmost, TTL
 };

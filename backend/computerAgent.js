@@ -13,6 +13,7 @@ const workingMemory = require("./workingMemory");
 const replanner = require("./replanner"); // P3-3: 失败自修复 + Replanner
 const watch = require("./tools/watch");   // P3-4: Watch 生命周期管理（结束清理孤儿 watcher）
 const envContext = require("./envContext"); // P3-5: Environment Context（环境摘要注入 + 事件失效 + AX 快照）
+const permissions = require("./permissions"); // P3-6: 敏感输入 redact（步骤记录层）
 
 const MAX_STEPS = 15;
 const MAX_CONSECUTIVE_FAILURES = 3;
@@ -263,7 +264,9 @@ async function computerAgent(task, opts = {}) {
             if (onStatus) onStatus("WAITING");
         }
         const taskContext = isWatch ? { taskId: opts.taskId || null, isCancelled } : undefined;
-        const result = await tools.run(toolName, action, params, { taskContext });
+        // P3-6: 权限上下文（goal=决策意图，secure=AX 快照含密码框）
+        const permContext = { taskId: opts.taskId || null, goal, secure: envContext.hasSecureField(opts.taskId) };
+        const result = await tools.run(toolName, action, params, { taskContext, context: permContext });
         if (isWatch) {
             const watchInfo = result.watch || null;
             if (wmObj) {
@@ -288,8 +291,9 @@ async function computerAgent(task, opts = {}) {
         const step = {
             tool: toolName,
             action,
-            params: truncate(params, 150),
-            input: truncate(params, 150),
+            // P3-6: 步骤记录 redact 敏感输入（密码/token 等绝不进步骤/WM/前端）
+            params: permissions.redactSensitive(truncate(params, 150)),
+            input: permissions.redactSensitive(truncate(params, 150)),
             goal,
             level: result.level || "SAFE",
             ok: result.success === true,
@@ -306,7 +310,10 @@ async function computerAgent(task, opts = {}) {
         console.log(`🖥️ 步骤${stepIndex + 1}: ${toolName}.${action} →`, step.ok ? "成功" : (step.needConfirm ? "待确认" : (step.blocked ? "被拒" : "失败")));
 
         if (result.needConfirm && result.opId) {
-            pendingOps.push({ opId: result.opId, tool: toolName, action, reason: result.error || "需要确认", params: truncate(params, 120) });
+            // P3-6: 相同 opId 不重复入队（tools 层已对同参数去重，这里避免重复展示）
+            if (!pendingOps.some(o => o.opId === result.opId)) {
+                pendingOps.push({ opId: result.opId, tool: toolName, action, reason: result.error || "需要确认", rule: result.rule || "", params: truncate(params, 120) });
+            }
             consecutiveFailures = 0; // 待确认不算失败
         } else if (result.success) {
             consecutiveFailures = 0;
@@ -344,8 +351,8 @@ async function computerAgent(task, opts = {}) {
                         const recoveryStep = {
                             tool: rs.tool,
                             action: rs.action,
-                            params: truncate(rs.params, 150),
-                            input: truncate(rs.params, 150),
+                            params: permissions.redactSensitive(truncate(rs.params, 150)),
+                            input: permissions.redactSensitive(truncate(rs.params, 150)),
                             goal: rs.goal || `🔧 恢复步骤 ${i + 1}（针对 ${toolName}.${action}）`,
                             level: (rs.result && rs.result.level) || "SAFE",
                             ok: !!(rs.result && rs.result.success === true),

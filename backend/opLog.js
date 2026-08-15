@@ -30,13 +30,20 @@ function truncate(obj, maxLen = 300) {
 }
 
 // 记录一次工具调用
-function logToolCall({ tool, action, params, level, result }) {
+// P3-6: 审计字段 — taskId/opId/decision/reason/rule/resource（权限解释），params 已由调用方 redact
+function logToolCall({ tool, action, params, level, taskId, opId, decision, reason, rule, resource, result }) {
     append({
         type: "tool_call",
         tool,
         action,
         params: truncate(params),
         level: level || "SAFE",
+        taskId: taskId || null,
+        opId: opId || null,
+        decision: decision || level || "SAFE",
+        reason: reason ? truncate(reason, 200) : null,
+        rule: rule || null,
+        resource: resource ? truncate(resource, 150) : null,
         result: truncate({
             success: !!result.success,
             exitCode: result.exitCode ?? null,
