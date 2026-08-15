@@ -51,7 +51,7 @@ export default function ChatView() {
         setMessages((prev) => prev.map((m) => {
           if (m.id !== msgId) return m;
           if (running) {
-            return { ...m, taskId, running: true, steps: t.steps, pendingOps: t.pendingOps, status: t.status, content: `🖥️ 任务执行中…（已完成 ${t.steps.length} 步）` };
+            return { ...m, taskId, running: true, steps: t.steps, pendingOps: t.pendingOps, status: t.status, watch: t.watch, content: `🖥️ 任务执行中…（已完成 ${t.steps.length} 步）` };
           }
           return {
             ...m,
@@ -61,6 +61,7 @@ export default function ChatView() {
             pendingOps: t.pendingOps,
             previewProject,
             status: t.status,
+            watch: null,
             content: t.statusCompat === "error" ? `❌ 任务失败: ${t.error || t.reply || ""}` : t.statusCompat === "cancelled" ? "⏹️ 任务已取消" : (t.reply || "任务完成"),
             error: t.statusCompat === "error"
           };
@@ -224,6 +225,14 @@ export default function ChatView() {
                       {s.ok ? "✅" : s.needConfirm ? "⏸️" : s.blocked ? "⛔" : "❌"} {s.tool}.{s.action}{s.goal ? `（${s.goal}）` : ""}{s.error ? ` — ${s.error}` : ""}
                     </div>
                   ))}
+                  {msg.status === "WAITING" && msg.watch && (
+                    <div style={{ marginTop: "8px", padding: "8px 10px", borderRadius: "8px", background: "#ffca6b14", border: "1px solid #ffca6b44", fontSize: "12px", color: "#ffd27d" }}>
+                      <div>🟡 等待中：{msg.watch.conditionText || msg.watch.type}</div>
+                      <div style={{ fontSize: "11px", color: "#b8914a", marginTop: "2px" }}>
+                        ⏳ 剩余 {Math.max(0, Math.ceil(((msg.watch.timeoutAt || 0) - Date.now()) / 1000))}s · 自动继续，不消耗 Agent 决策
+                      </div>
+                    </div>
+                  )}
                   {!msg.cancelRequested && (
                     <button
                       onClick={() => cancelTask(msg.taskId, msg.id)}

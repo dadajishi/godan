@@ -21,6 +21,7 @@ const { DATA_ROOT } = require("./paths");
 const brain = require("./brain");
 const dispatch = require("./dispatcher");
 const workingMemory = require("./workingMemory");
+const watch = require("./tools/watch"); // P3-4: Watch 生命周期管理（取消/清理）
 
 const tasks = new Map(); // taskId → record
 const MAX_TASKS_MEM = 50; // 内存保留上限（磁盘全量保留）
@@ -169,7 +170,8 @@ function recoverFromDisk() {
                 if (!t.workingMemory || typeof t.workingMemory !== "object" || !t.workingMemory.taskId) {
                     t.workingMemory = workingMemory.create(t.id);
                 }
-                if (RUNNING_STATES.has(t.status)) {
+                const wasRunning = RUNNING_STATES.has(t.status);
+                if (wasRunning) {
                     // 崩溃中断：标记 FAILED，保留 steps 历史，可 retry 续跑
                     t.status = ST.FAILED;
                     t.error = "后端进程重启，任务中断（可点击重试）";
@@ -178,6 +180,15 @@ function recoverFromDisk() {
                     interrupted++;
                 }
                 tasks.set(t.id, t);
+                if (wasRunning) {
+                    // 原子落盘中断状态（磁盘快照与内存一致）
+                    try {
+                        const file = taskFilePath(t.id);
+                        const tmp = file + ".tmp";
+                        fs.writeFileSync(tmp, JSON.stringify(serializeTask(t)), "utf8");
+                        fs.renameSync(tmp, file);
+                    } catch (e) { /* 忽略 */ }
+                }
                 restored++;
             } catch (e) {
                 console.log("⚠️ 任务恢复跳过损坏文件:", file, e.message);
@@ -266,6 +277,7 @@ function runTask(taskId) {
             // 阶段 2: 调度执行（computer 模式由 computerAgent 逐 step 汇报）
             setStatus(taskId, ST.RUNNING);
             const out = await dispatch(aiResult, {
+                taskId, // P3-4: watch 工具需要 taskId（去重/取消/生命周期）
                 onStatus: (status) => setStatus(taskId, status),
                 onLog: (level, msg) => addLog(taskId, level, msg),
                 isCancelled: () => t.cancelRequested,
@@ -379,8 +391,11 @@ function cancelTask(id) {
     t.cancelRequested = true;
     setStatus(id, ST.CANCELLED);
     addLog(id, "info", "⏹️ 用户请求取消任务");
+    // P3-4: 取消该任务所有 active Watch（防孤儿 watcher 继续轮询）
+    const n = watch.manager.cancelTaskWatches(id);
+    if (n > 0) addLog(id, "info", `已停止 ${n} 个等待（Watch）`);
     persist(id);
-    console.log(`📋 任务 ${id} 取消请求已受理`);
+    console.log(`📋 任务 ${id} 取消请求已受理${n > 0 ? `（停止 ${n} 个 Watch）` : ""}`);
     return { ok: true, status: ST.CANCELLED };
 }
 
@@ -420,7 +435,9 @@ function getTask(id) {
         startedAt: t.startedAt,
         finishedAt: t.finishedAt,
         cancelRequested: t.cancelRequested,
-        workingMemory: t.workingMemory || null
+        workingMemory: t.workingMemory || null,
+        // P3-4: 附加当前 active watch（任务 WAITING 时前端显示等待内容/倒计时）
+        watch: watch.manager.activeWatch(id) // null 或 {watchId, type, conditionText, status, timeoutAt, ...}
     };
 }
 

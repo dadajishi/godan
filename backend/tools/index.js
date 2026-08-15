@@ -17,6 +17,7 @@ const keyboard = require("./keyboard");
 const mouse = require("./mouse");
 const windowTool = require("./window");
 const ui = require("./ui");
+const watch = require("./watch"); // P3-4: Watch/Event 条件等待
 
 const registry = {
     filesystem,
@@ -27,7 +28,8 @@ const registry = {
     keyboard,
     mouse,
     window: windowTool,
-    ui
+    ui,
+    watch
 };
 
 // ============ 待确认操作队列 ============
@@ -103,7 +105,13 @@ async function run(toolName, action, params = {}, opts = {}) {
     // 4. 执行
     let result;
     try {
-        result = await tool.actions[action](params);
+        // P3-4: watch 工具接收 taskContext（{taskId, isCancelled}），用于去重/取消/生命周期；
+        // 其余工具保持单参数签名不变
+        if (toolName === "watch" && opts.taskContext) {
+            result = await tool.actions[action](params, opts.taskContext);
+        } else {
+            result = await tool.actions[action](params);
+        }
     } catch (e) {
         result = { success: false, output: null, error: e.message, exitCode: 1 };
     }

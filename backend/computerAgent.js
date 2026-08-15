@@ -11,6 +11,7 @@ const tools = require("./tools");
 const opLog = require("./opLog");
 const workingMemory = require("./workingMemory");
 const replanner = require("./replanner"); // P3-3: 失败自修复 + Replanner
+const watch = require("./tools/watch");   // P3-4: Watch 生命周期管理（结束清理孤儿 watcher）
 
 const MAX_STEPS = 15;
 const MAX_CONSECUTIVE_FAILURES = 3;
@@ -231,7 +232,29 @@ async function computerAgent(task, opts = {}) {
 
         // 执行
         const stepStart = Date.now();
-        const result = await tools.run(toolName, action, params);
+        // P3-4: watch 工具 → 任务进入 WAITING（Agent 停止消耗决策 token，Watch 独立轮询）
+        const isWatch = toolName === "watch";
+        const wmObj = getWm();
+        if (isWatch) {
+            if (wmObj) workingMemory.update(wmObj, { waitingFor: { watchType: action, condition: truncate(params, 120), watchId: null } });
+            if (onStatus) onStatus("WAITING");
+        }
+        const taskContext = isWatch ? { taskId: opts.taskId || null, isCancelled } : undefined;
+        const result = await tools.run(toolName, action, params, { taskContext });
+        if (isWatch) {
+            const watchInfo = result.watch || null;
+            if (wmObj) {
+                if (watchInfo && watchInfo.watchId) {
+                    workingMemory.update(wmObj, { waitingFor: { watchId: watchInfo.watchId, watchType: watchInfo.type, condition: watchInfo.conditionText } });
+                }
+                // 触发 → 等待结束 + 记录验证成功；超时/失败 → 等待结束（交由失败分支）
+                if (watchInfo && watchInfo.status === "TRIGGERED") {
+                    workingMemory.update(wmObj, { waitingFor: null });
+                    workingMemory.recordVerification(wmObj, { method: "watch:" + watchInfo.type, ok: true, detail: watchInfo.conditionText });
+                }
+            }
+            if (onStatus) onStatus("RUNNING");
+        }
         const step = {
             tool: toolName,
             action,
@@ -261,7 +284,9 @@ async function computerAgent(task, opts = {}) {
             consecutiveFailures++;
             // ===================== P3-3: 失败自修复 + Replanner =====================
             // 错误分析 → 根因分类 → 恢复计划 → 执行恢复 → 验证 → 继续原任务
-            if (replanCount < maxReplans) {
+            // P3-4: Watch 被取消（任务取消场景）不触发 Replanner，直接由循环边界处理
+            const watchCancelled = isWatch && result.watch && result.watch.status === "CANCELLED";
+            if (!watchCancelled && replanCount < maxReplans) {
                 replanCount++;
                 if (onStatus) onStatus("RETRYING");
                 let analysis = null;
@@ -374,6 +399,12 @@ async function computerAgent(task, opts = {}) {
         finalState = "FAILED";
         finalSummary = `已达到最大步数(${MAX_STEPS})，任务未完全完成。已完成 ${steps.filter(s => s.ok).length} 步成功操作。`;
         if (onLog) onLog("warn", `达到最大步数(${MAX_STEPS})，任务未完全完成`);
+    }
+
+    // P3-4: 兜底清理 — 无论任务以何种方式结束，取消该任务仍活跃的 Watch（防孤儿 watcher）
+    if (opts.taskId) {
+        const n = watch.manager.cancelTaskWatches(opts.taskId);
+        if (n > 0) console.log(`⏹️ 清理 ${n} 个任务 Watch（任务结束）`);
     }
 
     // 终态汇报（任务状态机消费: SUCCESS / FAILED / CANCELLED）

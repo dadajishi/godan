@@ -37,6 +37,7 @@ function create(taskId) {
         currentFocus: null,
         currentFile: null,
         currentStep: null,          // {index, stepId, tool, action}
+        waitingFor: null,           // P3-4: Watch 等待中 {watchId, watchType, condition}（触发后置 null）
         recentActions: [],          // {tool, action, goal, ok, level, time}
         recentVerifications: [],    // {method, ok, detail, time}
         variables: {},              // 任务变量 {key: value}
@@ -196,6 +197,10 @@ function summarize(wm) {
     if (wm.currentStep && wm.currentStep.tool) {
         const idx = (typeof wm.currentStep.index === "number") ? wm.currentStep.index + 1 : "?";
         lines.push(`- 当前步骤: ${idx}. ${wm.currentStep.tool}.${wm.currentStep.action}`);
+    }
+    if (wm.waitingFor) {
+        const wf = wm.waitingFor;
+        lines.push(`- ⏳ 等待中: ${wf.condition || wf.watchType || ""}${wf.watchId ? ` (${wf.watchId})` : ""}`);
     }
     const vKeys = Object.keys(wm.variables || {});
     if (vKeys.length) lines.push(`- 任务变量: ${JSON.stringify(wm.variables).slice(0, 200)}`);
