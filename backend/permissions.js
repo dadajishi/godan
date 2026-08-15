@@ -126,6 +126,15 @@ function classifyPath(target, write) {
         if (p === home || p === "/") {
             return { level: "DANGEROUS", reason: "不允许对目录根执行破坏性操作", rule: "ROOT_PATH_WRITE" };
         }
+        // home 根目录 shell/配置文件 dotfile（写入可注入持久命令 → 至少 CONFIRM，审计发现）
+        const HOME_DOTFILES = [".bashrc", ".zshrc", ".profile", ".bash_profile", ".zprofile",
+            ".bash_aliases", ".zshenv", ".zshrc.local", ".gitconfig", ".vimrc", ".inputrc",
+            ".config/fish/config.fish", ".cshrc", ".tcshrc"];
+        for (const d of HOME_DOTFILES) {
+            if (p === path.join(home, d)) {
+                return { level: "CONFIRM", reason: `home 配置文件不允许直接写入: ~/${d}（可注入持久命令）`, rule: "HOME_DOTFILE_WRITE" };
+            }
+        }
         // 凭证类文件（写/删）
         if (/(\.ssh|\.gnupg|\.aws|\.netrc|\.kube|\.env$|credential|secret|token|\.pem$|\.key$|id_rsa|id_ed25519)/.test(p)) {
             return { level: "DANGEROUS", reason: `敏感文件不允许修改/删除: ${path.basename(p)}`, rule: "SENSITIVE_FILE_WRITE" };
@@ -250,9 +259,25 @@ function classifyShell(command, depth = 0) {
         return { level: "CONFIRM", reason: `${binName} 运行脚本文件，内容不可静态分析，需要确认`, rule: "SHELL_SCRIPT_FILE" };
     }
 
+    // 2.55. 命令执行包装器（command/time/xargs/builtin/exec/nohup 等前缀）:
+    //       真正的命令是剩余参数 → 递归分析（审计发现的 S1 残余绕过面:
+    //       `command rm x`、`ls | xargs rm` 此前被当 SAFE）
+    const CMD_WRAPPERS = new Set(["command", "time", "xargs", "builtin", "exec", "nohup", "setsid", "nice", "ionice"]);
+    if (CMD_WRAPPERS.has(binName)) {
+        // 去掉包装器自身的选项参数（如 xargs -n 1、time -p），取剩余命令
+        const rest = args.replace(/^\s*(?:-[a-zA-Z0-9]|--[a-z-]+)(?:\s+\S+)*\s+/, "").trim();
+        if (!rest) {
+            return { level: "CONFIRM", reason: `${binName} 后无命令，需要确认`, rule: "WRAPPER_EMPTY" };
+        }
+        const inner = classifyShell(rest, depth + 1);
+        if (inner.level !== "SAFE") {
+            return { level: inner.level, reason: `${binName} 包装的命令${inner.level === "DANGEROUS" ? "危险" : "需确认"}: ${inner.reason}`, rule: "CMD_WRAPPER_" + inner.level };
+        }
+        return { level: "SAFE", reason: "", rule: "CMD_WRAPPER_SAFE" };
+    }
+
     // 2.6. 解释器（node/python 等）: 内联代码静态扫描，脚本文件内容不可知 → CONFIRM（S1-c）
     if (["node", "python3", "python", "ruby", "perl", "deno", "bun"].includes(binName)) {
-        // 纯版本/帮助查询 → SAFE
         if (/^(\s|$)|-{0,2}(V|version|h|help|e)$/.test(args.trim()) || !args) {
             return { level: "SAFE", reason: "", rule: "INTERP_QUERY" };
         }
