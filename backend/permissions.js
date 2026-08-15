@@ -53,7 +53,8 @@ const READONLY_COMMANDS = new Set([
     "type", "hash", "history", "jobs", "alias", "pgrep", "lsof", "netstat", "command", "basename",
     "dirname", "realpath", "readlink", "xargs", "tr", "cut", "awk", "sed", "locale", "getconf",
     "sysctl", "open", "say", "sleep", "true", "false", "test", "[", "time",
-    "sh", "bash", "zsh" // shell 包装，按内容递归判断
+    "cd", // shell builtin，无副作用（目录切换）
+    "sh", "bash", "zsh" // shell 包装，按内容递归判断（见 classifyShell 2.5）
 ]);
 
 // 明确写/修改/进程类命令 → CONFIRM（按参数进一步分级）
@@ -134,34 +135,142 @@ function classifyPath(target, write) {
 }
 
 // ============ shell 命令解析 ============
-// 取首词（忽略管道/前缀 env/等）
+// 引号感知的命令链分割（| ; && || & 分段，正确处理 ' " 引号与转义）
+// 安全原则: 每一段（pipeline 任一段、顺序执行任一段）都必须独立经过权限分类，
+//           任意一段出现危险/需确认命令 → 整个命令提升到对应等级。
+function splitChains(cmd) {
+    const parts = [];
+    let cur = "", inS = null, esc = false;
+    for (let i = 0; i < cmd.length; i++) {
+        const ch = cmd[i];
+        if (esc) { cur += ch; esc = false; continue; }
+        if (ch === "\\" && inS) { cur += ch; esc = true; continue; }
+        if (inS) {
+            cur += ch;
+            if (ch === inS) inS = null;
+            continue;
+        }
+        if (ch === "'" || ch === '"') { inS = ch; cur += ch; continue; }
+        if (ch === "|" || ch === ";" || ch === "&") {
+            if (cur.trim()) parts.push(cur.trim());
+            cur = "";
+            continue;
+        }
+        cur += ch;
+    }
+    if (cur.trim()) parts.push(cur.trim());
+    return parts;
+}
+
+// 取单段命令的首词与参数
 function parseCommand(command) {
-    const cmd = String(command || "").trim();
-    // 去掉前缀 env 等
-    let rest = cmd.replace(/^env\s+/, "");
-    // 管道取第一段
-    rest = rest.split(/\s*\|\s*/)[0] || "";
-    // 分隔首词与参数
-    const m = rest.match(/^([^\s;]+)(.*)$/s);
-    return m ? { bin: m[1], args: (m[2] || "").trim() } : { bin: rest, args: "" };
+    const cmd = String(command || "").trim().replace(/^env\s+/, "");
+    const m = cmd.match(/^([^\s]+)(.*)$/s);
+    return m ? { bin: m[1], args: (m[2] || "").trim() } : { bin: cmd, args: "" };
+}
+
+// 提取 sh/bash/zsh 的 -c/--command/-e 后代码（引号包裹或裸代码）
+function extractShellCode(args) {
+    const m = args.match(/(?:-c|--command|-e)\s+("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|(\S+))$/);
+    if (!m) return null;
+    let code = m[1];
+    if ((code.startsWith('"') && code.endsWith('"')) || (code.startsWith("'") && code.endsWith("'"))) {
+        code = code.slice(1, -1);
+    }
+    return code || null;
+}
+
+// 提取解释器 -e/-c 后的内联代码
+function extractInterpCode(args) {
+    const m = args.match(/(?:-c|-e|--eval)\s+("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|(\S+))$/);
+    if (!m) return null;
+    let code = m[1];
+    if ((code.startsWith('"') && code.endsWith('"')) || (code.startsWith("'") && code.endsWith("'"))) {
+        code = code.slice(1, -1);
+    }
+    return code || null;
+}
+
+// 解释器内联代码静态扫描（含绕过路径关键字 → 至少 CONFIRM）
+const INTERP_DANGEROUS_RE = /os\.system|os\.popen|os\.remove|os\.unlink|os\.rmdir|shutil\.rmtree|shutil\.move|subprocess|child_process|execSync|execFile|spawn|exec\(|eval\(|require\(|\bimport\s|\bfrom\s+\S+\s+import|open\([^)]*['"]w|writeFileSync|writeFile|appendFile|unlinkSync|rmSync|rmdir\b|rm\s+-rf|curl|wget|sudo|chmod|chown|killall|pkill|mkfs|\bdd\b|\/etc\/|\.ssh|password|token|secret/i;
+
+// 等级合并：DANGEROUS > CONFIRM > SAFE
+function mergeLevels(levels) {
+    let worst = "SAFE";
+    for (const l of levels) {
+        if (l === "DANGEROUS") return "DANGEROUS";
+        if (l === "CONFIRM") worst = "CONFIRM";
+    }
+    return worst;
 }
 
 // shell 分级（fail closed）
-function classifyShell(command) {
+// 注意: 内部递归 depth 限制（防 sh -c "sh -c "sh -c ..."" 无限嵌套）；超过 3 层 → CONFIRM
+function classifyShell(command, depth = 0) {
     const cmd = String(command || "").trim();
     if (!cmd) return { level: "DANGEROUS", reason: "空命令", rule: "EMPTY_COMMAND" };
+    if (depth > 3) return { level: "CONFIRM", reason: `命令嵌套过深(${depth}层)，无法可靠静态分析，需要确认`, rule: "NESTED_TOO_DEEP" };
 
-    // 1. 黑名单 → DANGEROUS
+    // 1. 黑名单 → DANGEROUS（整体文本检查，先于分段）
     for (const re of SHELL_BLACKLIST) {
         if (re.test(cmd)) {
             return { level: "DANGEROUS", reason: `命令被列入危险黑名单: ${re}`, rule: "SHELL_BLACKLIST" };
         }
     }
 
+    // 2. 分段（| ; && || &），每段独立分类，取最高等级（S1-b）
+    const segments = splitChains(cmd);
+    if (segments.length > 1) {
+        const levels = segments.map(seg => classifyShell(seg, depth + 1));
+        const worst = mergeLevels(levels.map(l => l.level));
+        if (worst !== "SAFE") {
+            const bad = levels.find(l => l.level === worst);
+            return { level: worst, reason: `命令链中存在${worst === "DANGEROUS" ? "危险" : "需确认"}操作: ${(bad && bad.reason) || ""}`, rule: "CHAIN_" + worst };
+        }
+        // 全 SAFE → 落到单段逻辑（冗余但无害）
+    }
+
     const { bin, args } = parseCommand(cmd);
     const binName = bin.replace(/^\.\//, "");
 
-    // 2. 明确只读命令 → SAFE
+    // 2.5. sh/bash/zsh 包装: 必须递归分析 -c/--command 内层代码（S1-a）
+    if (["sh", "bash", "zsh", "dash", "ksh"].includes(binName)) {
+        if (/(^|\s)-c\s|(^|\s)--command\s|(^|\s)-e\s/.test(args)) {
+            const code = extractShellCode(args);
+            if (!code) {
+                return { level: "CONFIRM", reason: `${binName} 内联代码无法可靠解析，需要确认`, rule: "SHELL_CODE_UNPARSEABLE" };
+            }
+            const inner = classifyShell(code, depth + 1);
+            if (inner.level !== "SAFE") {
+                return { level: inner.level, reason: `${binName} -c 内层命令${inner.level === "DANGEROUS" ? "危险" : "需确认"}: ${inner.reason}`, rule: "SHELL_WRAPPER_" + inner.level };
+            }
+            return { level: "SAFE", reason: "", rule: "SHELL_WRAPPER_SAFE" };
+        }
+        // 无 -c（运行脚本文件）: 脚本内容不可知 → CONFIRM（fail closed）
+        return { level: "CONFIRM", reason: `${binName} 运行脚本文件，内容不可静态分析，需要确认`, rule: "SHELL_SCRIPT_FILE" };
+    }
+
+    // 2.6. 解释器（node/python 等）: 内联代码静态扫描，脚本文件内容不可知 → CONFIRM（S1-c）
+    if (["node", "python3", "python", "ruby", "perl", "deno", "bun"].includes(binName)) {
+        // 纯版本/帮助查询 → SAFE
+        if (/^(\s|$)|-{0,2}(V|version|h|help|e)$/.test(args.trim()) || !args) {
+            return { level: "SAFE", reason: "", rule: "INTERP_QUERY" };
+        }
+        if (/(^|\s)-c\s|(^|\s)-e\s|(^|\s)--eval\s/.test(args)) {
+            const code = extractInterpCode(args);
+            if (!code) {
+                return { level: "CONFIRM", reason: `${binName} 内联代码无法可靠解析，需要确认`, rule: "INTERP_CODE_UNPARSEABLE" };
+            }
+            if (INTERP_DANGEROUS_RE.test(code)) {
+                return { level: "CONFIRM", reason: `${binName} 内联代码含敏感操作（文件/进程/网络/系统调用），需要确认`, rule: "INTERP_CODE_DANGEROUS" };
+            }
+            return { level: "SAFE", reason: "", rule: "INTERP_CODE_SAFE" };
+        }
+        // 运行脚本文件 / -m 模块: 内容不可知 → CONFIRM
+        return { level: "CONFIRM", reason: `${binName} 运行脚本文件/模块，内容不可静态分析，需要确认`, rule: "INTERP_SCRIPT_FILE" };
+    }
+
+    // 3. 明确只读命令 → SAFE
     if (READONLY_COMMANDS.has(binName) && !WRITE_COMMANDS.has(binName) && !NETWORK_COMMANDS.has(binName)) {
         // 特例: 只读命令带重定向/原地修改 → CONFIRM
         if (/>|>>/.test(args) && /(cat|echo|printf|tee|sed|awk|sort|head|tail)/.test(binName)) {
@@ -173,7 +282,7 @@ function classifyShell(command) {
         return { level: "SAFE", reason: "", rule: "READONLY_COMMAND" };
     }
 
-    // 3. git 子命令分级
+    // 4. git 子命令分级
     if (binName === "git") {
         const sub = (args.match(/^\s*([a-z-]+)/) || [])[1] || "";
         if (GIT_READONLY_SUB.has(sub)) return { level: "SAFE", reason: "", rule: "GIT_READONLY" };
@@ -181,7 +290,7 @@ function classifyShell(command) {
         return { level: "CONFIRM", reason: `git 未知子命令(${sub || "?"})，需要确认`, rule: "GIT_UNKNOWN" };
     }
 
-    // 4. npm 子命令分级
+    // 5. npm 子命令分级
     if (binName === "npm") {
         const sub = (args.match(/^\s*([a-z-]+)/) || [])[1] || "";
         if (NPM_READONLY_SUB.has(sub)) return { level: "SAFE", reason: "", rule: "NPM_READONLY" };
@@ -189,7 +298,7 @@ function classifyShell(command) {
         return { level: "CONFIRM", reason: `npm 未知子命令(${sub || "?"})，需要确认`, rule: "NPM_UNKNOWN" };
     }
 
-    // 5. curl: 只读 GET → SAFE；带写/发送参数 → CONFIRM
+    // 6. curl: 只读 GET → SAFE；带写/发送参数 → CONFIRM
     if (binName === "curl") {
         if (CURL_WRITE_FLAGS.test(args)) {
             return { level: "CONFIRM", reason: "curl 带写/发送参数（上传/提交数据/凭证），需要确认", rule: "NETWORK_WRITE" };
@@ -197,7 +306,7 @@ function classifyShell(command) {
         return { level: "SAFE", reason: "", rule: "CURL_GET" };
     }
 
-    // 6. 明确写/修改/进程类命令 → CONFIRM（黑名单已排除最危险；带系统路径参数 → DANGEROUS）
+    // 7. 明确写/修改/进程类命令 → CONFIRM（黑名单已排除最危险；带系统路径参数 → DANGEROUS）
     if (WRITE_COMMANDS.has(binName)) {
         // 提取路径参数（rm /etc/hosts、mv a /usr/bin/x 等）→ 系统关键路径直接 DANGEROUS
         const pathArgs = args.split(/\s+/).filter(a => /^[~/]|^\.{1,2}\//.test(a));
@@ -208,15 +317,11 @@ function classifyShell(command) {
         return { level: "CONFIRM", reason: `写/修改类命令 ${binName} 需要确认`, rule: "WRITE_COMMAND" };
     }
 
-    // 7. 网络命令 → CONFIRM
+    // 8. 网络命令 → CONFIRM
     if (NETWORK_COMMANDS.has(binName)) {
         return { level: "CONFIRM", reason: `网络/外部通信命令 ${binName} 需要确认`, rule: "NETWORK_COMMAND" };
     }
 
-    // 8. 低风险本机命令（node/python3 运行本地脚本）
-    if (["node", "python3", "python", "ruby", "perl", "deno", "bun"].includes(binName)) {
-        return { level: "SAFE", reason: "", rule: "LOCAL_SCRIPT" };
-    }
     // 9. brew 子命令分级
     if (["brew"].includes(binName)) {
         const sub = (args.match(/^\s*([a-z-]+)/) || [])[1] || "";
