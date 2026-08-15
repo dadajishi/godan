@@ -31,6 +31,62 @@ function truncate(obj, maxLen = 300) {
     return obj;
 }
 
+// ===================== M6: 重复成功探索抑制 =====================
+// 问题: 只读探测（ls/find/getTree/readValue 等）连续重复执行且结果未变 → Agent thrashing。
+// 机制: 对只读探测动作生成「参数指纹」，同指纹第 2 次起系统拦截（与 screenshot.analyze 去重一致），
+//       提示 LLM 基于已有结果推进或换参数探测；写操作（write/delete/click/type 等）绝不抑制。
+// 指纹粒度: 命令原文(trim) / 路径 / app+keyword —— 换路径或换关键词属于新探测，不误伤。
+// ==============================================================
+// 只读 shell 命令前缀（写命令/管道写不抑制）
+const READONLY_SHELL_RE = /^(ls|cat|find|grep|wc|du|df|ps|pwd|echo|whoami|stat|file|head|tail|lsreg|mdfind|which|type|readlink|xattr|plutil|defaults\s+read|system_profiler|sw_vers|uname|date|pgrep)\b/;
+// 明确的写/副作用命令词（出现在命令任意位置 → 不抑制；管道右命令含这些词同样否决）
+const SHELL_WRITE_WORDS = /\b(rm|mv|cp|touch|mkdir|write|tee|chmod|chown|kill|pkill|osascript|open|launchctl|install|brew|npm|pip|git|curl|wget|python|python3|node|ruby|perl|sh|bash|zsh|sudo|dd|truncate|unlink)\b/;
+// 写重定向: > 或 >> 且前导不是数字（2>/dev/null、2>&1 是 stderr 丢弃的只读标准写法，放行）
+const WRITE_REDIR_RE = /(^|[^0-9])>(>)?/;
+
+// 归一化 shell 命令指纹（防 LLM 微变体绕过）:
+//   1. 只取第一个分号前的主命令（去 `; echo '---EXIT:'$?` 等调试后缀）
+//   2. 展开 ~ → 绝对路径（find ~/Desktop 与 find /Users/xxx/Desktop 视为相同探测）
+//   3. 去引号、压缩空白
+function normalizeShellCommand(cmd) {
+    let c = String(cmd || "").trim();
+    c = c.split(";")[0];
+    // ~ 展开（任意位置，不仅开头）：find ~/Desktop 与 find /Users/xxx/Desktop 视为相同探测
+    c = c.replace(/(^|\s)~\//g, "$1" + require("os").homedir() + "/");
+    c = c.replace(/'([^']*)'/g, "$1").replace(/"([^"]*)"/g, "$1");
+    c = c.replace(/\s+/g, " ").trim();
+    return c;
+}
+
+function isReadOnlyProbe(tool, action, params) {
+    if (tool === "shell" && action === "exec") {
+        const cmd = String(params.command || params.cmd || "").trim();
+        // 必须由只读命令开头 + 无写重定向（> file / >> file；2>/dev/null、2>&1 是 stderr 丢弃，放行）+ 无写/副作用命令词
+        return READONLY_SHELL_RE.test(cmd) && !WRITE_REDIR_RE.test(cmd) && !SHELL_WRITE_WORDS.test(cmd);
+    }
+    if (tool === "filesystem" && ["list", "read", "search"].includes(action)) return true;
+    if (tool === "ui" && ["getTree", "findElement", "readValue"].includes(action)) return true;
+    if (tool === "window" && ["list", "getBounds"].includes(action)) return true;
+    if (tool === "applications" && action === "isRunning") return true;
+    return false;
+}
+
+function probeFingerprint(tool, action, params) {
+    if (tool === "shell") return `shell:${normalizeShellCommand(params.command || params.cmd)}`;
+    if (tool === "filesystem") return `fs:${action}:${String(params.path || params.file || params.target || params.keyword || "").trim()}`;
+    if (tool === "ui") return `ui:${action}:${String(params.app || params.name || "").trim()}${params.keyword ? ":" + params.keyword : ""}`;
+    if (tool === "window") return `win:${action}:${String(params.name || "").trim()}`;
+    if (tool === "applications") return `app:${action}:${String(params.name || "").trim()}`;
+    return null;
+}
+
+function describeProbe(tool, action, params) {
+    if (tool === "shell") return `命令「${String(params.command || params.cmd || "").trim().slice(0, 60)}」`;
+    if (tool === "filesystem") return `${tool}.${action} 于 ${params.path || params.file || params.keyword || ""}`;
+    if (tool === "ui") return `${tool}.${action} ${params.app || params.name || ""}${params.keyword ? " 关键词「" + params.keyword + "」" : ""}`;
+    return `${tool}.${action} ${params.name || ""}`;
+}
+
 function buildSystemPrompt(task, toolSpecJson, wmText, envText) {
     return `
 你是「狗蛋」的电脑操作 Agent，负责在用户的 Mac/PC 上完成真实操作。
@@ -140,6 +196,7 @@ async function computerAgent(task, opts = {}) {
     let analyzeCount = 0;        // 本任务 analyze 总次数
     let verifyPending = false;   // GUI 操作后允许再验证 1 次
     let lastFocus = "";          // 上次 analyze 的 focus（GUI 自动验证复用）
+    const probeCounts = new Map(); // M6: 只读探测指纹 → 次数（同指纹第 2 次起拦截）
 
     for (let stepIndex = 0; stepIndex < MAX_STEPS; stepIndex++) {
         // ===== 取消检查（每 step 边界）=====
@@ -232,6 +289,17 @@ async function computerAgent(task, opts = {}) {
 
         // ===================== 决策审查（防重复 analyze / 限频） =====================
         let blockedReason = null;
+        // M6: 重复成功探索抑制 — 只读探测同指纹第 2 次起拦截（计数器在任务内累计）
+        if (isReadOnlyProbe(toolName, action, params)) {
+            const fp = probeFingerprint(toolName, action, params);
+            if (fp) {
+                const c = (probeCounts.get(fp) || 0) + 1;
+                probeCounts.set(fp, c);
+                if (c >= 2) {
+                    blockedReason = `⚠️ 系统拦截：${describeProbe(toolName, action, params)} 已执行 ${c} 次且结果未变，重复探测无意义。请基于已有结果推进：执行目标操作（mouse/keyboard/write 等）、换不同参数探测获取新信息，或输出 done 结束任务。禁止再次执行相同探测。`;
+                }
+            }
+        }
         if (toolName === "screenshot" && action === "analyze") {
             const key = JSON.stringify(params || {});
             analyzeCount++;
