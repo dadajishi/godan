@@ -473,18 +473,37 @@ async function computerAgent(task, opts = {}) {
         }
 
         // ===== GUI 操作成功后自动验证（一次，系统执行，不走 LLM 决策）=====
+        // P4-1 M6b: 视觉降级 — 优先 ui.readValue（AX 毫秒级零成本）；仅当目标应用无文本值
+        //（自绘界面/画布/游戏）时降级 screenshot.analyze（视觉模型未配置则记录失败，不再默认依赖）
         const isGuiAction = (toolName === "mouse" || toolName === "keyboard") && result.success === true;
         if (isGuiAction) {
-            const verifyParams = lastFocus ? { focus: lastFocus } : {};
-            const verify = await tools.run("screenshot", "analyze", verifyParams);
-            analyzeCount++;
-            lastAnalyzeKey = JSON.stringify(verifyParams);
+            const targetApp = lastFocus || (getWm() && getWm().currentApp) || null;
+            let verify = null;
+            let verifyMethod = "";
+            if (targetApp) {
+                verify = await tools.run("ui", "readValue", { app: targetApp });
+                const hasText = verify.success && verify.value !== null && String(verify.value).trim() !== "";
+                if (hasText) {
+                    verifyMethod = "ui.readValue";
+                } else {
+                    // 无文本值（自绘/画布）→ 视觉兜底
+                    verifyMethod = "screenshot.analyze";
+                    verify = await tools.run("screenshot", "analyze", lastFocus ? { focus: lastFocus } : {});
+                }
+            } else {
+                verifyMethod = "screenshot.analyze";
+                verify = await tools.run("screenshot", "analyze", {});
+            }
+            if (verifyMethod === "screenshot.analyze") {
+                analyzeCount++;
+                lastAnalyzeKey = JSON.stringify(lastFocus ? { focus: lastFocus } : {});
+            }
             verifyPending = true; // 允许 LLM 再验证 1 次（决策审查中放行后置 false）
             const verifyStep = {
-                tool: "screenshot", action: "analyze",
-                params: verifyParams,
-                input: verifyParams,
-                goal: "🖥️ GUI操作后自动验证（系统执行）。请对比验证结果：若目标状态已达成（如显示屏显示了你点击的内容），立即输出 done 结束任务；若不确定最多再验证一次，不要反复分析",
+                tool: verifyMethod.split(".")[0], action: verifyMethod.split(".")[1],
+                params: verifyMethod === "ui.readValue" ? { app: targetApp } : (lastFocus ? { focus: lastFocus } : {}),
+                input: verifyMethod === "ui.readValue" ? { app: targetApp } : (lastFocus ? { focus: lastFocus } : {}),
+                goal: `🖥️ GUI操作后自动验证（系统执行，${verifyMethod}）。请对比验证结果：若目标状态已达成（如显示屏显示了你点击的内容），立即输出 done 结束任务；若不确定最多再验证一次，不要反复分析`,
                 level: "SAFE", ok: verify.success, needConfirm: false, blocked: false, opId: null,
                 output: verify.success ? String(verify.output || "").slice(0, 500) : null,
                 error: verify.error ? String(verify.error).slice(0, 500) : null,
@@ -494,7 +513,7 @@ async function computerAgent(task, opts = {}) {
                 retryCount: 0
             };
             steps.push(verifyStep);
-            console.log("🧪 GUI操作后自动验证:", verify.success ? "完成" : "失败");
+            console.log(`🧪 GUI操作后自动验证(${verifyMethod}):`, verify.success ? "完成" : "失败");
             if (onStep) onStep(verifyStep, pendingOps.slice());
         }
 
