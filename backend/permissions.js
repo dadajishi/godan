@@ -88,7 +88,9 @@ const NPM_WRITE_SUB = new Set(["install", "i", "add", "remove", "uninstall", "up
 const CURL_WRITE_FLAGS = /-(o|O|d|F|T|X|U|u|e|E|b|c|H|A)\b|--output|--data|--form|--upload|--request|--user|--header|--cookie|--proxy|--referer|--cert|--key\b/;
 
 // GUI 危险语义词（mouse/keyboard 的 goal 检查，保守规则）
-const GUI_CONFIRM_WORDS = /删除|移除|清空|购买|支付|付款|下单|发送|发布|提交|确认|卸载|格式化|退出登录|注销|delete|remove|purchase|buy|pay|send|publish|submit|confirm|uninstall|format|logout|sign\s*out/i;
+// 注意: 词必须精确——裸"清空"曾误伤"清空计算器输入"(按C键)这类无害操作，已收敛为破坏性场景；
+//      "确认/confirm"同样误伤"点击确认按钮"的普通对话框交互，已移除（危险语义由删除/购买/支付等词覆盖）
+const GUI_CONFIRM_WORDS = /删除|移除|购买|支付|付款|下单|发送|发布|提交|卸载|格式化|退出登录|注销|清空(?:回收站|垃圾|缓存|浏览器数据|历史记录)|delete|remove|purchase|buy|pay|send|publish|submit|uninstall|format|logout|sign\s*out|empty\s+trash/i;
 const GUI_DANGEROUS_WORDS = /rm\s+-rf|格式化|format|清空回收站|empty\s+trash|wipe|shred/i;
 
 // 敏感字段名（redact 用）
