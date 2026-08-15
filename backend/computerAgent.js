@@ -9,6 +9,7 @@
 const llm = require("./llm");
 const tools = require("./tools");
 const opLog = require("./opLog");
+const workingMemory = require("./workingMemory");
 
 const MAX_STEPS = 15;
 const MAX_CONSECUTIVE_FAILURES = 3;
@@ -26,12 +27,14 @@ function truncate(obj, maxLen = 300) {
     return obj;
 }
 
-function buildSystemPrompt(task, toolSpecJson) {
+function buildSystemPrompt(task, toolSpecJson, wmText) {
     return `
 你是「狗蛋」的电脑操作 Agent，负责在用户的 Mac/PC 上完成真实操作。
 
 【用户目标】
 ${task}
+
+${wmText ? `【当前任务工作记忆】（Agent 已确认的状态，直接使用，不要重复探测；若与实际不符再以实际为准）\n${wmText}\n` : ""}
 
 【可用工具】（JSON 格式说明）
 ${toolSpecJson}
@@ -138,11 +141,13 @@ async function computerAgent(task, opts = {}) {
             + (s.output ? ` | 输出: ${s.output.slice(0, 220)}` : "")
         ).join("\n");
 
-        // LLM 决策下一步
+        // LLM 决策下一步（P3-2: 注入工作记忆摘要，每步实时更新）
         let decision = null;
         try {
+            const wmObj = (typeof opts.getWorkingMemory === "function") ? opts.getWorkingMemory() : null;
+            const wmText = wmObj ? workingMemory.summarize(wmObj) : "";
             decision = await llm.chat({
-                system: buildSystemPrompt(task, toolSpecJson),
+                system: buildSystemPrompt(task, toolSpecJson, wmText),
                 user: buildUserPrompt(history || null),
                 temperature: 0.2,
                 maxTokens: 700,

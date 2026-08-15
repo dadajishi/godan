@@ -20,6 +20,7 @@ const path = require("path");
 const { DATA_ROOT } = require("./paths");
 const brain = require("./brain");
 const dispatch = require("./dispatcher");
+const workingMemory = require("./workingMemory");
 
 const tasks = new Map(); // taskId → record
 const MAX_TASKS_MEM = 50; // 内存保留上限（磁盘全量保留）
@@ -104,7 +105,6 @@ function serializeTask(t) {
         mode: t.mode || null
     };
 }
-
 function deserializeTask(d) {
     // 旧格式容错：缺失字段补默认
     return {
@@ -164,6 +164,10 @@ function recoverFromDisk() {
             try {
                 const d = JSON.parse(fs.readFileSync(path.join(TASKS_DIR, file), "utf8"));
                 const t = deserializeTask(d);
+                // P3-2: 恢复/补齐 working memory（旧 checkpoint 无此字段或损坏时重建）
+                if (!t.workingMemory || typeof t.workingMemory !== "object" || !t.workingMemory.taskId) {
+                    t.workingMemory = workingMemory.create(t.id);
+                }
                 if (RUNNING_STATES.has(t.status)) {
                     // 崩溃中断：标记 FAILED，保留 steps 历史，可 retry 续跑
                     t.status = ST.FAILED;
@@ -260,14 +264,17 @@ function runTask(taskId) {
                 onStatus: (status) => setStatus(taskId, status),
                 onLog: (level, msg) => addLog(taskId, level, msg),
                 isCancelled: () => t.cancelRequested,
+                getWorkingMemory: () => t.workingMemory,
                 onStep: (step, pendingOps) => {
                     const rec = newStepRecord(step, t.attempts);
                     t.steps.push(rec);
                     t.currentStep = { stepId: rec.stepId, index: t.steps.length - 1, tool: rec.tool, action: rec.action };
                     t.nextStepIndex = t.steps.length; // checkpoint: 下一个待执行 step 下标
                     t.pendingOps = pendingOps || [];
+                    // P3-2: 每 step 后自动更新工作记忆（应用/文件提取 + action/error/verification 记录）
+                    workingMemory.applyStep(t.workingMemory, rec, t.steps.length - 1);
                     t.updatedAt = now();
-                    persist(taskId); // 每步完成即 checkpoint
+                    persist(taskId); // 每步完成即 checkpoint（WM 随任务落盘）
                 }
             });
 
@@ -332,8 +339,8 @@ function createTask(message) {
         startedAt: null,
         finishedAt: null,
         cancelRequested: false,
-        // checkpoint 预留挂载点（P3-2/P3-x 填充）
-        workingMemory: null,
+        // P3-2: 每任务独立工作记忆（随 checkpoint 落盘，与全局 memory/ 解耦）
+        workingMemory: workingMemory.create(taskId),
         nextStepIndex: null,
         mode: null
     };
@@ -404,7 +411,8 @@ function getTask(id) {
         updatedAt: t.updatedAt,
         startedAt: t.startedAt,
         finishedAt: t.finishedAt,
-        cancelRequested: t.cancelRequested
+        cancelRequested: t.cancelRequested,
+        workingMemory: t.workingMemory || null
     };
 }
 

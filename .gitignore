@@ -33,6 +33,7 @@ state.json
 oplog.jsonl
 processes/
 screenshots/
+tasks/
 
 # build artifacts
 release/
