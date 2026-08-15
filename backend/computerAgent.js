@@ -12,6 +12,7 @@ const opLog = require("./opLog");
 const workingMemory = require("./workingMemory");
 const replanner = require("./replanner"); // P3-3: 失败自修复 + Replanner
 const watch = require("./tools/watch");   // P3-4: Watch 生命周期管理（结束清理孤儿 watcher）
+const envContext = require("./envContext"); // P3-5: Environment Context（环境摘要注入 + 事件失效 + AX 快照）
 
 const MAX_STEPS = 15;
 const MAX_CONSECUTIVE_FAILURES = 3;
@@ -29,7 +30,7 @@ function truncate(obj, maxLen = 300) {
     return obj;
 }
 
-function buildSystemPrompt(task, toolSpecJson, wmText) {
+function buildSystemPrompt(task, toolSpecJson, wmText, envText) {
     return `
 你是「狗蛋」的电脑操作 Agent，负责在用户的 Mac/PC 上完成真实操作。
 
@@ -38,6 +39,9 @@ ${task}
 
 ${wmText ? `【当前任务工作记忆】（Agent 已确认的状态，直接使用，不要重复探测；若与实际不符再以实际为准）\n${wmText}\n` : ""}
 
+${envText ? `【当前环境】（系统实时提供的环境摘要。已确认的信息直接使用，不要再重复查询/探测；标注"已过期"的字段才需要重新获取）
+${envText}
+` : ""}
 【可用工具】（JSON 格式说明）
 ${toolSpecJson}
 
@@ -75,6 +79,8 @@ ${toolSpecJson}
   1. ui.getTree(app) 拿控件树（按钮带行列号 row/col）
   2. ui.findElement(app, label/keyword/role) 拿控件精确坐标
   3. window.getBounds(app) 拿窗口位置
+- 【当前环境】的 AX 摘要已包含相关控件及屏幕坐标(x,y)，可直接用于 mouse.click，不要重复 getTree
+- 需要摘要之外的控件坐标时，用 ui.findElement 按名称/角色精确定位（一次调用），不要反复 getTree 全量树
 - 验证用 ui.readValue(app)：读显示屏/输入框当前值，毫秒级；或 ui.getTree 对比控件状态
 - 每次 mouse/keyboard 操作后必须验证是否生效；验证不通过 → 重新规划（换控件/换方案），最多 3 次
 - ui 工具返回的坐标是屏幕逻辑像素，可直接用于 mouse.click / keyboard
@@ -151,13 +157,30 @@ async function computerAgent(task, opts = {}) {
             + (s.output ? ` | 输出: ${s.output.slice(0, 220)}` : "")
         ).join("\n");
 
-        // LLM 决策下一步（P3-2: 注入工作记忆摘要，每步实时更新）
+        // LLM 决策下一步（P3-2: 注入工作记忆摘要；P3-5: 注入环境上下文摘要，每步实时更新）
         let decision = null;
         try {
             const wmObj = getWm();
             const wmText = wmObj ? workingMemory.summarize(wmObj) : "";
+            // P3-5: 环境上下文（缓存 + TTL + 事件失效，轻量）
+            let envText = "";
+            try {
+                const envCtx = await envContext.get({
+                    taskId: opts.taskId || null,
+                    wm: wmObj,
+                    task: {
+                        status: "RUNNING",
+                        // 决策发生在工具执行前，toolName/action 尚未决定，只传 step 序号
+                        currentStep: { index: stepIndex },
+                        attempts: 1
+                    }
+                });
+                envText = envContext.summarize(envCtx);
+            } catch (e) {
+                console.log("⚠️ Environment Context 生成失败:", e.message);
+            }
             decision = await llm.chat({
-                system: buildSystemPrompt(task, toolSpecJson, wmText),
+                system: buildSystemPrompt(task, toolSpecJson, wmText, envText),
                 user: buildUserPrompt(history || null),
                 temperature: 0.2,
                 maxTokens: 700,
@@ -255,6 +278,13 @@ async function computerAgent(task, opts = {}) {
             }
             if (onStatus) onStatus("RUNNING");
         }
+
+        // P3-5: 事件驱动失效（操作可能改变环境 → 标记 stale）+ AX 快照捕获（复用 agent 自己的 getTree，不额外探测）
+        envContext.invalidateForAction(opts.taskId, toolName, action);
+        if (toolName === "ui" && action === "getTree" && result.success && Array.isArray(result.tree)) {
+            envContext.captureTree(opts.taskId, result.tree);
+        }
+
         const step = {
             tool: toolName,
             action,
@@ -405,6 +435,7 @@ async function computerAgent(task, opts = {}) {
     if (opts.taskId) {
         const n = watch.manager.cancelTaskWatches(opts.taskId);
         if (n > 0) console.log(`⏹️ 清理 ${n} 个任务 Watch（任务结束）`);
+        envContext.clear(opts.taskId); // P3-5: 清理环境上下文缓存
     }
 
     // 终态汇报（任务状态机消费: SUCCESS / FAILED / CANCELLED）
