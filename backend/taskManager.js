@@ -28,6 +28,45 @@ const MAX_TASKS_MEM = 50; // 内存保留上限（磁盘全量保留）
 
 const TASKS_DIR = path.join(DATA_ROOT, "tasks");
 
+// M3: checkpoint 磁盘保留上限（防长期运行无限增长）
+//   只保留最近 MAX_TASK_FILES=100 个任务文件；运行中状态（PENDING/PLANNING/RUNNING/
+//   VERIFYING/WAITING/RETRYING）的任务文件无条件保护（不删），恢复所需状态不破坏
+const MAX_TASK_FILES = 100;
+const PROTECTED_STATES = new Set(["PENDING", "PLANNING", "RUNNING", "VERIFYING", "WAITING", "RETRYING"]);
+
+// 磁盘清理（createTask 后/启动恢复后调用；dir/keep 可注入便于测试）
+function pruneTaskFiles(dir = TASKS_DIR, keep = MAX_TASK_FILES) {
+    try {
+        if (!fs.existsSync(dir)) return { removed: 0, count: 0 };
+        const names = fs.readdirSync(dir).filter(f => f.endsWith(".json") && !f.endsWith(".tmp.json"));
+        // 快速路径: 未超上限不读文件内容
+        if (names.length <= keep) return { removed: 0, count: names.length };
+        const files = names
+            .map(f => {
+                const p = path.join(dir, f);
+                let mtime = 0, status = null;
+                try {
+                    mtime = fs.statSync(p).mtimeMs;
+                    status = JSON.parse(fs.readFileSync(p, "utf8")).status;
+                } catch (e) { /* 损坏/读取失败 → mtime 0，排最前删除 */ }
+                return { f, p, mtime, status };
+            })
+            .sort((a, b) => b.mtime - a.mtime); // 最新在前
+        let removed = 0, kept = 0;
+        for (const f of files) {
+            const protected_ = PROTECTED_STATES.has(f.status);
+            if (kept < keep || protected_) { kept++; continue; }
+            try { fs.unlinkSync(f.p); removed++; } catch (e) { /* 忽略 */ }
+        }
+        if (removed > 0) {
+            console.log(`🧹 任务 checkpoint 清理: 删除 ${removed} 个旧任务文件（保留 ${kept} 个）`);
+        }
+        return { removed, count: kept };
+    } catch (e) {
+        return { removed: 0, count: 0, error: e.message };
+    }
+}
+
 // ---------- 状态常量 ----------
 const ST = {
     PENDING: "PENDING",
@@ -198,6 +237,8 @@ function recoverFromDisk() {
         console.log("⚠️ 任务恢复失败:", e.message);
     }
     console.log(`📦 任务恢复: ${restored} 个（其中 ${interrupted} 个中断标记）`);
+    // M3: 启动恢复后清理磁盘 checkpoint 上限（运行中/中断任务文件受保护）
+    try { pruneTaskFiles(); } catch (e) { /* 忽略 */ }
     return { restored, interrupted };
 }
 
@@ -369,6 +410,8 @@ function createTask(message, opts = {}) {
     tasks.set(taskId, record);
     addLog(taskId, "info", "提交后台执行");
     persist(taskId);
+    // M3: 新任务产生后清理磁盘 checkpoint（只保留最近 100 个，运行中文件保护）
+    pruneTaskFiles();
 
     // 内存上限清理（只清内存，磁盘保留）
     if (tasks.size > MAX_TASKS_MEM) {
@@ -482,6 +525,7 @@ module.exports = {
     createTask, getTask, getTaskLogs, listTasks,
     cancelTask, retryTask, canRetry, MAX_RETRIES,
     recoverFromDisk,
+    pruneTaskFiles, MAX_TASK_FILES, // M3: checkpoint 磁盘保留上限
     ST, // 状态常量（前端/测试可用）
     serializeTask, deserializeTask, // checkpoint 序列化（供后续阶段/测试）
     TASKS_DIR
