@@ -9,6 +9,48 @@ const llm = require("../llm");
 
 const SHOT_DIR = path.join(DATA_ROOT, "screenshots");
 
+// M2: 截图存储上限（防长期运行无限增长）
+//   数量上限: MAX_SCREENSHOTS=200 张；磁盘上限: MAX_SCREENSHOT_MB=500MB
+//   超过任一上限 → 删除最旧截图（按 mtime），保留最新
+const MAX_SCREENSHOTS = 200;
+const MAX_SCREENSHOT_MB = 500;
+
+// 自动清理（capture 后调用；dir 参数便于测试注入临时目录，默认 SHOT_DIR）
+function enforceLimit(dir = SHOT_DIR) {
+    try {
+        if (!fs.existsSync(dir)) return { removed: 0, count: 0 };
+        let files = fs.readdirSync(dir)
+            .filter(f => /\.(png|jpe?g)$/i.test(f))
+            .map(f => {
+                const p = path.join(dir, f);
+                let st;
+                try { st = fs.statSync(p); } catch (e) { return null; }
+                return { f, p, mtime: st.mtimeMs, size: st.size };
+            })
+            .filter(Boolean)
+            .sort((a, b) => a.mtime - b.mtime); // 最旧在前
+        let removed = 0;
+
+        // 1. 磁盘上限（删除最旧直到达标；至少保留 1 张）
+        let total = files.reduce((s, x) => s + x.size, 0);
+        while (total > MAX_SCREENSHOT_MB * 1024 * 1024 && files.length > 1) {
+            const oldest = files.shift();
+            try { fs.unlinkSync(oldest.p); total -= oldest.size; removed++; } catch (e) { /* 忽略 */ }
+        }
+        // 2. 数量上限
+        while (files.length > MAX_SCREENSHOTS) {
+            const oldest = files.shift();
+            try { fs.unlinkSync(oldest.p); removed++; } catch (e) { /* 忽略 */ }
+        }
+        if (removed > 0) {
+            console.log(`🧹 截图自动清理: 删除 ${removed} 张旧截图（目录 ${dir}）`);
+        }
+        return { removed, count: files.length };
+    } catch (e) {
+        return { removed: 0, count: 0, error: e.message };
+    }
+}
+
 function run(cmd, args, timeout = 20000) {
     return new Promise((resolve) => {
         execFile(cmd, args, { timeout }, (err, stdout, stderr) => {
@@ -57,6 +99,8 @@ async function capture(params = {}) {
         if (!fs.existsSync(file)) {
             return { success: false, output: null, error: "截图未生成文件", exitCode: 1 };
         }
+        // M2: 每次截图后自动清理（数量/磁盘上限）
+        enforceLimit();
         return { success: true, output: `截图已保存: ${file}`, error: null, exitCode: 0, file };
     } catch (e) {
         return { success: false, output: null, error: e.message, exitCode: 1 };
@@ -232,5 +276,7 @@ async function analyze(params = {}) {
 module.exports = {
     name: "screenshot",
     description: "屏幕截图与视觉分析：capture 截图保存；analyze 截图+AI看懂屏幕（返回描述和可交互元素坐标，坐标可直接用于 mouse/keyboard）",
-    actions: { capture, list: listShots, analyze }
+    actions: { capture, list: listShots, analyze },
+    // M2: 存储上限与清理（测试/运维用）
+    MAX_SCREENSHOTS, MAX_SCREENSHOT_MB, enforceLimit
 };
