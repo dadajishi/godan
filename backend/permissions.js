@@ -432,7 +432,11 @@ function classify(tool, action, params = {}, context) {
                 return { ...p, resource: p.level === "DANGEROUS" ? String(target).slice(0, 120) : undefined };
             }
             // 只读: list/read/search
-            return { level: "SAFE", reason: "", rule: "FILE_READ" };
+            if (["list", "read", "search"].includes(action)) {
+                return { level: "SAFE", reason: "", rule: "FILE_READ" };
+            }
+            // 未知动作 → fail closed CONFIRM（防御纵深：tools.run 已拦截不存在的动作，此处不静默 SAFE）
+            return { level: "CONFIRM", reason: `filesystem 未知动作「${action}」默认需要确认（fail closed）`, rule: "UNKNOWN_ACTION" };
         }
 
         case "applications": {
