@@ -7,6 +7,7 @@
 const crypto = require("crypto");
 const permissions = require("../permissions");
 const opLog = require("../opLog");
+const toolSchema = require("../toolSchema"); // P4-1 M1: 参数 schema 预验证
 
 const filesystem = require("./filesystem");
 const shell = require("./shell");
@@ -87,7 +88,25 @@ async function run(toolName, action, params = {}, opts = {}) {
         return { success: false, output: null, error: `未知动作: ${toolName}.${action}`, exitCode: 1 };
     }
 
-    // 1. 权限判定（P3-6: 工具+动作+参数+资源+上下文；fail closed）
+    // 1.5. P4-1 M1: 参数 schema 预验证（执行前发现参数错误，不浪费工具调用/LLM 决策）
+    const paramCheck = toolSchema.validate(toolName, action, params);
+    if (paramCheck) {
+        opLog.logToolCall({
+            tool: toolName, action, params: permissions.redactSensitive(params),
+            level: "SAFE", decision: "PARAM_ERROR", rule: "PARAM_SCHEMA",
+            reason: paramCheck.message,
+            result: { success: false, paramError: true, error: paramCheck.message }
+        });
+        return {
+            success: false, output: null, error: paramCheck.message,
+            exitCode: 1, paramError: true,
+            missing: paramCheck.missing,
+            allowed: paramCheck.allowed,
+            level: "SAFE"
+        };
+    }
+
+    // 2. 权限判定（P3-6: 工具+动作+参数+资源+上下文；fail closed）
     const permContext = opts.context || {};
     let perm = permissions.classify(toolName, action, params, permContext);
     // process.start 的命令内容也要过 shell 分类
@@ -177,13 +196,15 @@ function pendingList() {
     }));
 }
 
-// ============ 工具清单（给 LLM 的说明书）============
+// ============ 工具清单（给 LLM 的说明书，P4-1 M1: 含参数 schema）============
 function toolSpec() {
     const specs = {};
     for (const [name, tool] of Object.entries(registry)) {
         specs[name] = {
             description: tool.description,
-            actions: Object.keys(tool.actions || {})
+            actions: Object.fromEntries(
+                Object.keys(tool.actions || {}).map(a => [a, toolSchema.schemaInfo(name, a)])
+            )
         };
     }
     return specs;
