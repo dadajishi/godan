@@ -302,6 +302,7 @@ async function computerAgent(task, opts = {}) {
             opId: result.opId || null,
             output: result.success ? String(result.output || "").slice(0, 500) : null,
             error: result.error ? String(result.error).slice(0, 500) : null,
+            paramError: result.paramError === true, // P4-1 M4: 参数错误标记（前端/日志可见）
             startTime: stepStart,
             endTime: Date.now(),
             retryCount: 0
@@ -333,6 +334,7 @@ async function computerAgent(task, opts = {}) {
                         action,
                         params,
                         error: result.error,
+                        result, // P4-1 M4: paramError 标记（决策质量问题优先分类 PARAM_ERROR）
                         wm: getWm()
                     });
                 } catch (e) {

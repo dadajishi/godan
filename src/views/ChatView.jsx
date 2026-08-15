@@ -222,7 +222,7 @@ export default function ChatView() {
                       fontSize: "12px", lineHeight: "1.7", color: s.ok ? "#a8e6ce" : s.needConfirm ? "#ffd27d" : s.blocked ? "#ff9fac" : "#ffc2ca",
                       whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"
                     }}>
-                      {s.ok ? "✅" : s.needConfirm ? "⏸️" : s.blocked ? "⛔" : "❌"} {s.tool}.{s.action}{s.goal ? `（${s.goal}）` : ""}{s.error ? ` — ${s.error}` : ""}
+                      {s.ok ? "✅" : s.paramError ? "⚠️" : s.needConfirm ? "⏸️" : s.blocked ? "⛔" : "❌"} {s.tool}.{s.action}{s.goal ? `（${s.goal}）` : ""}{s.error ? ` — ${s.error}` : ""}
                     </div>
                   ))}
                   {msg.status === "WAITING" && msg.watch && (
@@ -264,7 +264,7 @@ export default function ChatView() {
                       fontSize: "12px", lineHeight: "1.7", color: s.ok ? "#a8e6ce" : s.needConfirm ? "#ffd27d" : s.blocked ? "#ff9fac" : "#ffc2ca",
                       whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"
                     }} title={`${s.tool}.${s.action}${s.error ? " — " + s.error : ""}`}>
-                      {s.ok ? "✅" : s.needConfirm ? "⏸️" : s.blocked ? "⛔" : "❌"} {si + 1}. {s.tool}.{s.action}{s.goal ? `（${s.goal}）` : ""}{s.error ? ` — ${s.error}` : ""}
+                      {s.ok ? "✅" : s.paramError ? "⚠️" : s.needConfirm ? "⏸️" : s.blocked ? "⛔" : "❌"} {si + 1}. {s.tool}.{s.action}{s.goal ? `（${s.goal}）` : ""}{s.error ? ` — ${s.error}` : ""}
                     </div>
                   ))}
                   {(msg.status === "FAILED" || msg.status === "CANCELLED") && (

@@ -21,11 +21,12 @@ const REPETITION_LIMIT = 3;    // 相同 tool+action+error 出现 ≥3 次 → �
 // ---------- 失败分类（确定性规则，按优先级匹配） ----------
 const CLASSIFIERS = [
     { type: "PERMISSION_DENIED", re: /not allowed|assistive|-25211|1002|EACCES|permission denied|operation not permitted|没有(?:辅助功能|屏幕录制|输入监控).*权限|缺少「/i, desc: "权限被拒绝" },
-    { type: "COMMAND_NOT_FOUND", re: /command not found|未找到命令|not recognized as an? (internal|external)|command not recognized/i, desc: "命令不存在" },
-    { type: "FILE_NOT_FOUND", re: /ENOENT|no such file or directory|找不到文件|文件不存在|does not exist|没有找到.*文件/i, desc: "文件/路径不存在" },
-    { type: "PORT_IN_USE", re: /EADDRINUSE|address already in use|端口.*(?:占用|被使用)|already in use/i, desc: "端口被占用" },
-    { type: "BUILD_ERROR", re: /SyntaxError|ReferenceError|TypeError|ERR_MODULE|ERR_REQUIRE|ERR_PACKAGE|error TS\d+|npm err|编译失败|构建失败|无法解析模块|module not found/i, desc: "构建/语法错误" },
-    { type: "TIMEOUT", re: /timed? ?out|ETIMEDOUT|超时|timeout/i, desc: "操作超时" },
+    { type: "COMMAND_NOT_FOUND", re: /\bcommand not found\b|未找到命令|not recognized as an? (?:internal|external)|\bcommand not recognized\b/i, desc: "命令不存在" },
+    { type: "FILE_NOT_FOUND", re: /\bENOENT\b|no such file or directory|找不到文件|文件不存在|\bdoes not exist\b|没有找到.*文件/i, desc: "文件/路径不存在" },
+    { type: "PORT_IN_USE", re: /\bEADDRINUSE\b|address already in use|端口.*(?:占用|被使用)|already in use/i, desc: "端口被占用" },
+    { type: "BUILD_ERROR", re: /\bSyntaxError\b|\bReferenceError\b|\bTypeError\b|\bERR_MODULE\b|\bERR_REQUIRE\b|\bERR_PACKAGE\b|\berror TS\d+\b|\bnpm err\b|编译失败|构建失败|无法解析模块|module not found/i, desc: "构建/语法错误" },
+    // 注意: timeout 正则必须有词边界——错误文本里可能出现参数名 "timeout"（如 paramError 的可用参数列表），无边界会误分类
+    { type: "TIMEOUT", re: /\btimed?\s?out\b|\bETIMEDOUT\b|超时/i, desc: "操作超时" },
     { type: "PATH_ERROR", re: /不是有效路径|无效路径|invalid path|is not a directory|not a directory|路径不存在/i, desc: "路径错误" }
 ];
 
@@ -51,8 +52,18 @@ function classifyAx({ tool, action, error, params }) {
 // 主入口：错误分类
 // ctx: {tool, action, params, error, result}
 function classifyFailure(ctx) {
-    const { tool, action, error } = ctx;
+    const { tool, action, error, result } = ctx;
     const msg = String(error || "");
+
+    // 0. 参数错误（P4-1 M4）：决策质量问题，不是环境问题——优先识别
+    //    识别依据: tools.run 的 paramError 标记 或 错误文本前缀「参数错误:」
+    if ((result && result.paramError === true) || /^参数错误[:：]/.test(msg)) {
+        return {
+            failureType: "PARAM_ERROR",
+            rootCause: `工具参数错误: ${msg.slice(0, 200)}`,
+            confidence: 0.98
+        };
+    }
 
     // 1. AX/ui/window/applications 上下文分类优先
     //    （应用未运行/窗口问题/控件未找到 比通用错误码更具体，
@@ -200,6 +211,15 @@ function buildRecoveryPlan(failure, ctx = {}) {
         }
         case "PERMISSION_DENIED": {
             return { ...base, actionable: false, notes: "权限被拒绝，需用户介入（检查系统权限或确认操作），不自动恢复" };
+        }
+        case "PARAM_ERROR": {
+            // P4-1 M4: 参数错误是决策质量问题——不自动恢复（环境无问题），
+            // 提示 Agent 根据 missing/allowed 修正参数后重试，绝不原样重试
+            return {
+                ...base,
+                actionable: false,
+                notes: "参数错误：请阅读错误中的「缺少/可用参数」信息，修正参数后重试；禁止原样重试相同参数"
+            };
         }
         case "COMMAND_NOT_FOUND":
         case "BUILD_ERROR":

@@ -247,7 +247,9 @@ function newStepRecord(step, attempt) {
         // P3-3: 恢复步骤标记（recovery=true 表示是 Replanner 生成的恢复动作；analysis 含完整失败分析）
         recovery: step.recovery || false,
         recoveryOf: step.recoveryOf || null,
-        analysis: step.analysis || null
+        analysis: step.analysis || null,
+        // P4-1 M4: 参数错误标记（决策质量问题，前端/日志可见）
+        paramError: step.paramError === true
     };
     return s;
 }
