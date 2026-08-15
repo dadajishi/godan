@@ -65,14 +65,16 @@ ${toolSpecJson}
 8. 所有 params 必须用绝对路径（~ 可展开）
 9. 最后必须 done 并给出中文总结
 
-【GUI 视觉闭环规则】（任务涉及点击/输入/窗口操作时强制）
-- 窗口级定位优先用系统 API：window.getBounds（应用名）→ 精确窗口位置，比视觉找窗口可靠
-- 操作屏幕前：用 screenshot.analyze 看屏幕；有窗口 bounds 时传 {bounds, focus:"目标"} 做区域分析，定位更准
-- 每次 mouse/keyboard 操作后：系统会自动执行一次验证截图并展示给你；看到验证结果后立即判断——目标状态已达成就输出 done，不确定最多再验证 1 次，绝不反复分析
-- 系统会拦截「相同参数的重复 analyze」（屏幕没变化时）和「超过 10 次的分析」：被拦截后直接执行操作或 done，不要尝试绕过
-- 验证不通过（操作没生效/点错了）：重新规划（换坐标/换元素/换方案），最多重新规划 3 次，不要无限重试
-- analyze 返回的坐标是屏幕逻辑像素，可直接用于 mouse.click 等
-- 纯文件/Shell/进程任务不需要截图，直接操作即可
+【GUI 操作规则】（任务涉及点击/输入/窗口操作时使用）
+- 定位优先用 Accessibility（快/准/零门槛）：
+  1. ui.getTree(app) 拿控件树（按钮带行列号 row/col）
+  2. ui.findElement(app, label/keyword/role) 拿控件精确坐标
+  3. window.getBounds(app) 拿窗口位置
+- 验证用 ui.readValue(app)：读显示屏/输入框当前值，毫秒级；或 ui.getTree 对比控件状态
+- 每次 mouse/keyboard 操作后必须验证是否生效；验证不通过 → 重新规划（换控件/换方案），最多 3 次
+- ui 工具返回的坐标是屏幕逻辑像素，可直接用于 mouse.click / keyboard
+- 只有 Accessibility 无法覆盖的场景（自绘界面/游戏）才用 screenshot.analyze（视觉模型默认未启用，被拦截就换 ui 方案）
+- 纯文件/Shell/进程任务不需要 GUI，直接操作即可
 `;
 }
 

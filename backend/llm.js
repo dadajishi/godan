@@ -18,9 +18,11 @@ function isVisionModel(model) {
     return VISION_MODEL_RE.test(String(model || ""));
 }
 
-// 发现可用的视觉模型配置（优先级：当前配置支持视觉 > Ollama 本地视觉模型 > OPENAI_API_KEY）
+// 发现可用的视觉模型配置（GUI 定位已由 Accessibility 取代，视觉仅作可选兜底）
+// 默认只认「用户显式配置的视觉模型」（设置页选 gpt-4o 等）；
+// Ollama 本地视觉模型与 OPENAI_API_KEY 需要环境变量 GODAN_ENABLE_VISION=1 才启用
 async function getVisionConfig() {
-    // 1. 当前配置（BYOK / .env）若本身支持视觉
+    // 1. 当前配置（BYOK / .env）若本身支持视觉 → 用户显式选择的，始终可用
     try {
         const cfg = await getConfig();
         if (cfg && cfg.apiKey && isVisionModel(cfg.model)) {
@@ -28,7 +30,10 @@ async function getVisionConfig() {
         }
     } catch (e) { /* 继续探测 */ }
 
-    // 2. Ollama 本地视觉模型（ollama list 自动发现）
+    // 2. 显式开启视觉增强后，才自动发现 Ollama 本地视觉模型 / OPENAI key
+    if (!process.env.GODAN_ENABLE_VISION) {
+        return null;
+    }
     try {
         const { execFile } = require("child_process");
         const models = await new Promise((resolve) => {

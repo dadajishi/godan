@@ -70,7 +70,17 @@ backend/
 |------|------|------|
 | P1 ✅ | 文件系统 + Shell + 应用启动 + 进程管理 + 权限 + 日志 + ReAct 循环 | ✅ 已提交 b483a6f，9 项冒烟全过 |
 | P2 ✅ | 截图(screencapture) + 鼠标/键盘(cliclick) + 窗口管理 | ✅ 已提交 26b66b2；截图 2940x1912、window.list/focus/getBounds、mouse.move、cliclick 权限全可用 |
-| P3 ✅ | 视觉理解（截图喂视觉模型）+ Agent 自主观察/操作/验证闭环 | ✅ 已提交；llm.vision + screenshot.analyze(focus/bounds) + window.getBounds 混合定位；demo 跑通「读屏→输入7→视觉验证91+77」 |
+| P3 ✅ | 视觉理解（截图喂视觉模型）+ Agent 自主观察/操作/验证闭环 | ✅ 已提交 5a3c9a7；llm.vision + screenshot.analyze(focus/bounds) + window.getBounds 混合定位 |
+| P4 ✅ | Accessibility UI 树（ui 工具）取代视觉定位 | ✅ 已提交；ui.getTree/findElement/readValue，12×7=84 毫秒级闭环，视觉默认关闭 |
+
+## P4 实现要点（AX 取代视觉，实测结论）
+
+- ui.getTree：AX 控件树枚举（entire contents），按钮按「行内数量==最大行数」标注 row/col（自动排除标题栏交通灯/工具栏）
+- ui.findElement：按 name/keyword/role 定位精确坐标；ui.readValue：读主显示区（y 最大文本，计算器有历史标签+主显示两个文本）
+- 坐标 = AX 屏幕逻辑像素，与 cliclick 直接兼容，无需 Retina 换算
+- 实测：计算器 12 × 7 = 84 全链路（getTree→click→readValue）毫秒级，无视觉模型
+- macOS 计算器要点：row1col1 是退格键非 AC（新版布局）；AC/C 动态切换；= 在 row5col4；AX 按钮无 name → 靠网格行列定位
+- 视觉模型（llm.vision/screenshot.analyze）降级为可选兜底：默认只认用户显式配置的视觉模型；Ollama 自动发现需 GODAN_ENABLE_VISION=1
 | 异步化 ✅ | 长任务不超时：/api/tasks 提交即返回 taskId，后台执行，前端 1.5s 轮询实时步骤 | ✅ 已提交；128s 视觉任务全程无超时，15 步自主完成（打开→定位→点击7→验证）；连接断开不影响后台 |
 | 停止逻辑 ✅ | 决策审查：同参 analyze 去重拦截 + 每任务 analyze 限频 10 次 + GUI 操作后系统自动验证一次 | ✅ 已提交；验收任务步数 15→4（open→analyze→click→自动verify→done），两次实测均收敛完成；拦截后 LLM 换策略而非绕过 |
 

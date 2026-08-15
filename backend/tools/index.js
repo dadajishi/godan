@@ -16,6 +16,7 @@ const screenshot = require("./screenshot");
 const keyboard = require("./keyboard");
 const mouse = require("./mouse");
 const windowTool = require("./window");
+const ui = require("./ui");
 
 const registry = {
     filesystem,
@@ -25,7 +26,8 @@ const registry = {
     screenshot,
     keyboard,
     mouse,
-    window: windowTool
+    window: windowTool,
+    ui
 };
 
 // ============ 待确认操作队列 ============

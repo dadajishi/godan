@@ -132,6 +132,7 @@ function classify(tool, action, params = {}) {
         case "keyboard":
         case "mouse":
         case "window":
+        case "ui": // Accessibility 只读枚举 + 定位，SAFE
             return { level: "SAFE", reason: "" };
         default:
             return { level: "SAFE", reason: "" };
