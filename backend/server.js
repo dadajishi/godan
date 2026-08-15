@@ -416,14 +416,16 @@ app.put("/api/projects/:name/file", (req, res) => {
 // =====================================================
 
 // 创建任务（立即返回 taskId，Agent 后台执行）
+// body: {message, maxReplans?} — maxReplans 任务级重规划配额（P3-3）
 app.post("/api/tasks", (req, res) => {
     try {
         const message = (req.body && req.body.message !== undefined) ? req.body.message : null;
         if (!message || typeof message !== "string" || !message.trim()) {
             return res.status(400).json({ success: false, error: "任务描述不能为空" });
         }
-        const taskId = taskManager.createTask(message);
-        console.log("📋 任务已创建:", taskId, "|", message.slice(0, 50));
+        const maxReplans = (req.body && typeof req.body.maxReplans === "number") ? req.body.maxReplans : undefined;
+        const taskId = taskManager.createTask(message, { maxReplans });
+        console.log("📋 任务已创建:", taskId, "|", message.slice(0, 50), maxReplans !== undefined ? `| maxReplans=${maxReplans}` : "");
         res.json({ success: true, taskId });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });

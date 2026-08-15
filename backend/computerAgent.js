@@ -10,6 +10,7 @@ const llm = require("./llm");
 const tools = require("./tools");
 const opLog = require("./opLog");
 const workingMemory = require("./workingMemory");
+const replanner = require("./replanner"); // P3-3: 失败自修复 + Replanner
 
 const MAX_STEPS = 15;
 const MAX_CONSECUTIVE_FAILURES = 3;
@@ -114,6 +115,14 @@ async function computerAgent(task, opts = {}) {
     let cancelled = false;
     let finalState = "SUCCESS"; // SUCCESS | FAILED | CANCELLED
     let finalSummary = "";
+    // P3-3: 重规划配额（任务级可配置）
+    const maxReplans = (typeof opts.maxReplans === "number" && opts.maxReplans >= 0)
+        ? opts.maxReplans
+        : replanner.DEFAULT_MAX_REPLANS;
+    let replanCount = 0;
+
+    // 工作记忆读取助手（P3-2 挂载在任务记录上）
+    const getWm = () => (typeof opts.getWorkingMemory === "function") ? opts.getWorkingMemory() : null;
 
     // 启动即 RUNNING
     if (onStatus) onStatus("RUNNING");
@@ -144,7 +153,7 @@ async function computerAgent(task, opts = {}) {
         // LLM 决策下一步（P3-2: 注入工作记忆摘要，每步实时更新）
         let decision = null;
         try {
-            const wmObj = (typeof opts.getWorkingMemory === "function") ? opts.getWorkingMemory() : null;
+            const wmObj = getWm();
             const wmText = wmObj ? workingMemory.summarize(wmObj) : "";
             decision = await llm.chat({
                 system: buildSystemPrompt(task, toolSpecJson, wmText),
@@ -250,9 +259,81 @@ async function computerAgent(task, opts = {}) {
             consecutiveFailures = 0;
         } else {
             consecutiveFailures++;
+            // ===================== P3-3: 失败自修复 + Replanner =====================
+            // 错误分析 → 根因分类 → 恢复计划 → 执行恢复 → 验证 → 继续原任务
+            if (replanCount < maxReplans) {
+                replanCount++;
+                if (onStatus) onStatus("RETRYING");
+                let analysis = null;
+                try {
+                    analysis = await replanner.analyzeAndRecover({
+                        tool: toolName,
+                        action,
+                        params,
+                        error: result.error,
+                        wm: getWm()
+                    });
+                } catch (e) {
+                    console.log("⚠️ Replanner 异常:", e.message);
+                }
+                if (onStatus) onStatus("RUNNING");
+
+                if (analysis) {
+                    // 1. 记录分析（failureType/rootCause/confidence 必须落日志）
+                    const logMsg = `🔧 失败分析[${replanCount}/${maxReplans}] ${analysis.failureType} (置信度${Math.round(analysis.confidence * 100)}%): ${analysis.rootCause}`;
+                    if (onLog) onLog("info", logMsg);
+                    console.log(logMsg);
+
+                    // 2. 推送 recovery 步骤（结构化，标记 recovery/recoveryOf/analysis）
+                    analysis.recoverySteps.forEach((rs, i) => {
+                        const recoveryStep = {
+                            tool: rs.tool,
+                            action: rs.action,
+                            params: truncate(rs.params, 150),
+                            input: truncate(rs.params, 150),
+                            goal: rs.goal || `🔧 恢复步骤 ${i + 1}（针对 ${toolName}.${action}）`,
+                            level: (rs.result && rs.result.level) || "SAFE",
+                            ok: !!(rs.result && rs.result.success === true),
+                            needConfirm: !!(rs.result && rs.result.needConfirm),
+                            blocked: !!(rs.result && rs.result.blocked),
+                            opId: (rs.result && rs.result.opId) || null,
+                            output: (rs.result && rs.result.success) ? String(rs.result.output || "").slice(0, 500) : null,
+                            error: (rs.result && rs.result.error) ? String(rs.result.error).slice(0, 500) : null,
+                            recovery: true,
+                            recoveryOf: `agent#${stepIndex + 1}`, // 指向原失败步骤（taskManager 记录中原步骤无 stepId，用序号标识）
+                            retryCount: replanCount,
+                            // 完整分析记录（failureType/rootCause/confidence/recoveryPlan/recoveryResult）随 checkpoint 落盘
+                            analysis: i === 0 ? {
+                                failureType: analysis.failureType,
+                                rootCause: analysis.rootCause,
+                                confidence: analysis.confidence,
+                                recoveryPlan: analysis.recoveryPlan,
+                                recoveryResult: analysis.recoveryResult
+                            } : undefined,
+                            startTime: Date.now(),
+                            endTime: Date.now()
+                        };
+                        steps.push(recoveryStep);
+                        if (onStep) onStep(recoveryStep, pendingOps.slice());
+                    });
+
+                    // 3. 记录 recoveryResult 并判断
+                    const resultLog = `   ↳ 恢复结果: ${analysis.recovered ? "✅ 成功" : "⛔ 未解决"} — ${(analysis.recoveryResult && analysis.recoveryResult.detail) || analysis.notes || ""}`;
+                    if (onLog) onLog(analysis.recovered ? "info" : "warn", resultLog);
+                    console.log(resultLog);
+
+                    if (analysis.recovered) {
+                        // 问题已由系统解决：不惩罚，Agent 以新环境继续原任务
+                        consecutiveFailures = 0;
+                        continue;
+                    }
+                    // 未恢复：consecutiveFailures 已 +1，交给下方上限判断；分析已注入日志供 Agent 参考
+                }
+            }
+            // ===================== 最终防线：连续失败上限 =====================
             if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
                 finalState = "FAILED";
-                finalSummary = `连续 ${MAX_CONSECUTIVE_FAILURES} 步执行失败，任务中止。最后错误: ${result.error}`;
+                finalSummary = `连续 ${MAX_CONSECUTIVE_FAILURES} 步执行失败（含 ${replanCount} 次自动恢复尝试），任务中止。最后错误: ${result.error}`;
                 finished = true;
                 if (onLog) onLog("error", `连续 ${MAX_CONSECUTIVE_FAILURES} 步执行失败: ${result.error}`);
                 break;

@@ -124,6 +124,7 @@ function deserializeTask(d) {
         startedAt: d.startedAt || null,
         finishedAt: d.finishedAt || null,
         cancelRequested: !!d.cancelRequested,
+        maxReplans: d.maxReplans || undefined, // P3-3: 重规划配额（崩溃恢复后保留）
         workingMemory: d.workingMemory || null,
         nextStepIndex: d.nextStepIndex || null,
         mode: d.mode || null
@@ -231,7 +232,11 @@ function newStepRecord(step, attempt) {
         error: step.error || null,
         retryCount: step.retryCount || 0,
         forced: step.forced || false,
-        opId: step.opId || null
+        opId: step.opId || null,
+        // P3-3: 恢复步骤标记（recovery=true 表示是 Replanner 生成的恢复动作；analysis 含完整失败分析）
+        recovery: step.recovery || false,
+        recoveryOf: step.recoveryOf || null,
+        analysis: step.analysis || null
     };
     return s;
 }
@@ -265,6 +270,7 @@ function runTask(taskId) {
                 onLog: (level, msg) => addLog(taskId, level, msg),
                 isCancelled: () => t.cancelRequested,
                 getWorkingMemory: () => t.workingMemory,
+                maxReplans: t.maxReplans, // P3-3: 重规划配额（任务级可配置）
                 onStep: (step, pendingOps) => {
                     const rec = newStepRecord(step, t.attempts);
                     t.steps.push(rec);
@@ -320,7 +326,7 @@ function runTask(taskId) {
 }
 
 // ---------- 对外 API ----------
-function createTask(message) {
+function createTask(message, opts = {}) {
     const taskId = newId("t_");
     const record = {
         id: taskId,
@@ -339,6 +345,8 @@ function createTask(message) {
         startedAt: null,
         finishedAt: null,
         cancelRequested: false,
+        // P3-3: 重规划配额（任务级可配置，默认 DEFAULT_MAX_REPLANS）
+        maxReplans: (typeof opts.maxReplans === "number" && opts.maxReplans >= 0) ? opts.maxReplans : undefined,
         // P3-2: 每任务独立工作记忆（随 checkpoint 落盘，与全局 memory/ 解耦）
         workingMemory: workingMemory.create(taskId),
         nextStepIndex: null,
