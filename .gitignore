@@ -44,3 +44,4 @@ release/
 usage.json
 benchmark-report.json
 index-*.js
+backend/memory/state.json

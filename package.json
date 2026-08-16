@@ -55,7 +55,8 @@
       "!backend/projects.json",
       "!backend/last_project.json",
       "!backend/state.json",
-      "!backend/oplog.jsonl"
+      "!backend/oplog.jsonl",
+      "!backend/memory/state.json"
     ],
     "asarUnpack": [
       "backend/node_modules/**"
@@ -110,7 +111,8 @@
         "!backend/projects.json",
         "!backend/last_project.json",
         "!backend/state.json",
-        "!backend/oplog.jsonl"
+        "!backend/oplog.jsonl",
+        "!backend/memory/state.json"
       ]
     },
     "linux": {
