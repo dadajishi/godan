@@ -43,3 +43,4 @@ backend/oplog.jsonl
 release/
 usage.json
 benchmark-report.json
+index-*.js
