@@ -43,7 +43,9 @@
       "!**/node_modules/playwright-core/**",
       "!**/node_modules/.bin/playwright*",
       "!backend/node_modules/.cache/**",
-      "!backend/*.db"
+      "!backend/*.db",
+      "!backend/.env",
+      "!backend/.env.*"
     ],
     "asarUnpack": [
       "backend/node_modules/**"
@@ -92,7 +94,9 @@
         "!**/node_modules/playwright-core/**",
         "!**/node_modules/.bin/playwright*",
         "!backend/node_modules/.cache/**",
-        "!backend/*.db"
+        "!backend/*.db",
+        "!backend/.env",
+        "!backend/.env.*"
       ]
     },
     "linux": {
