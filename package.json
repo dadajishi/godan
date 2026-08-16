@@ -45,7 +45,11 @@
       "!backend/node_modules/.cache/**",
       "!backend/*.db",
       "!backend/.env",
-      "!backend/.env.*"
+      "!backend/.env.*",
+      "!backend/projects.json",
+      "!backend/last_project.json",
+      "!backend/state.json",
+      "!backend/oplog.jsonl"
     ],
     "asarUnpack": [
       "backend/node_modules/**"
@@ -96,7 +100,11 @@
         "!backend/node_modules/.cache/**",
         "!backend/*.db",
         "!backend/.env",
-        "!backend/.env.*"
+        "!backend/.env.*",
+        "!backend/projects.json",
+        "!backend/last_project.json",
+        "!backend/state.json",
+        "!backend/oplog.jsonl"
       ]
     },
     "linux": {

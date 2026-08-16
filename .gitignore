@@ -34,6 +34,10 @@ oplog.jsonl
 processes/
 screenshots/
 tasks/
+backend/projects.json
+backend/last_project.json
+backend/state.json
+backend/oplog.jsonl
 
 # build artifacts
 release/
